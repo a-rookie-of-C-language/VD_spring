@@ -1,0 +1,23 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/VD?allowPublicKeyRetrieval=TRUE&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: su201314
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+app:
+  upload:
+    base-path: uploads
+    cover-path: covers
+  security:
+    jwt:
+      secret: hzz.arookieofc-language.Elysia.Cyrene
+      expiry-minutes: 120

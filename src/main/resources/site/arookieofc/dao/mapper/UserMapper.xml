@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.UserMapper">
+
+    <resultMap id="UserResultMap" type="site.arookieofc.dao.entity.User">
+        <result column="student_no" property="studentNo"/>
+        <result column="username" property="username"/>
+        <result column="password" property="password"/>
+        <result column="role" property="role"/>
+        <result column="total_hours" property="totalHours"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <select id="getUserByStudentNo" resultMap="UserResultMap">
+        SELECT username, student_no, password, role, total_hours, created_at
+        FROM users
+        WHERE student_no = #{studentNo}
+        LIMIT 1
+    </select>
+
+    <select id="login" resultMap="UserResultMap">
+        SELECT username, student_no, password, role, total_hours, created_at
+        FROM users
+        WHERE student_no = #{studentNo}
+          AND password = #{password}
+        LIMIT 1
+    </select>
+
+</mapper>

@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.ActivityMapper">
+
+    <resultMap id="ActivityResultMap" type="site.arookieofc.dao.entity.Activity">
+        <id column="id" property="id"/>
+        <result column="functionary" property="functionary"/>
+        <result column="name" property="name"/>
+        <result column="type" property="type"/>
+        <result column="description" property="description"/>
+        <result column="enrollment_start_time" property="enrollmentStartTime"/>
+        <result column="enrollment_end_time" property="enrollmentEndTime"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="cover_path" property="coverPath"/>
+        <result column="max_participants" property="maxParticipant"/>
+        <result column="status" property="status"/>
+        <result column="is_full" property="isFull"/>
+        <result column="duration" property="duration"/>
+        <collection property="attachment" ofType="java.lang.String" column="id" select="selectAttachmentsByActivityId"/>
+        <collection property="participants" ofType="java.lang.String" column="id" select="selectParticipantsByActivityId"/>
+    </resultMap>
+
+    <select id="getById" resultMap="ActivityResultMap">
+        SELECT id, functionary, name, type, description,
+               enrollment_start_time, enrollment_end_time,
+               start_time, end_time, cover_path, max_participants, status, is_full, duration
+        FROM activities
+        WHERE id = #{id}
+    </select>
+
+  <select id="listAll" resultMap="ActivityResultMap">
+        SELECT id, functionary, name, type, description,
+               enrollment_start_time, enrollment_end_time,
+               start_time, end_time, cover_path, max_participants, status, is_full, duration
+        FROM activities
+        ORDER BY start_time DESC
+  </select>
+
+  <select id="countFiltered" resultType="int">
+    SELECT COUNT(1)
+    FROM activities
+    <where>
+      <if test="type != null">AND type = #{type}</if>
+      <if test="status != null">AND status = #{status}</if>
+      <if test="status == null and excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
+      <if test="functionary != null and functionary != ''">AND functionary = #{functionary}</if>
+      <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
+      <if test="startFrom != null">AND start_time &gt;= #{startFrom}</if>
+      <if test="startTo != null">AND start_time &lt;= #{startTo}</if>
+      <if test="isFull != null">AND is_full = #{isFull}</if>
+    </where>
+  </select>
+
+  <select id="listPaged" resultMap="ActivityResultMap">
+    SELECT id, functionary, name, type, description,
+           enrollment_start_time, enrollment_end_time,
+           start_time, end_time, cover_path, max_participants, status, is_full, duration
+    FROM activities
+    <where>
+      <if test="type != null">AND type = #{type}</if>
+      <if test="status != null">AND status = #{status}</if>
+      <if test="status == null and excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
+      <if test="functionary != null and functionary != ''">AND functionary = #{functionary}</if>
+      <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
+      <if test="startFrom != null">AND start_time &gt;= #{startFrom}</if>
+      <if test="startTo != null">AND start_time &lt;= #{startTo}</if>
+      <if test="isFull != null">AND is_full = #{isFull}</if>
+    </where>
+    ORDER BY start_time DESC
+    LIMIT #{pageSize} OFFSET #{offset}
+  </select>
+
+    <insert id="insert" parameterType="site.arookieofc.dao.entity.Activity">
+        INSERT INTO activities(
+            id, functionary, name, type, description,
+            enrollment_start_time, enrollment_end_time,
+            start_time, end_time, cover_path, max_participants, status, is_full, duration
+        ) VALUES (
+            #{id}, #{functionary}, #{name}, #{type}, #{description},
+            #{enrollmentStartTime}, #{enrollmentEndTime},
+            #{startTime}, #{endTime}, #{coverPath}, #{maxParticipant}, #{status}, #{isFull}, #{duration}
+        )
+    </insert>
+
+    <update id="update" parameterType="site.arookieofc.dao.entity.Activity">
+        UPDATE activities SET
+            functionary = #{functionary},
+            name = #{name},
+            type = #{type},
+            description = #{description},
+            enrollment_start_time = #{enrollmentStartTime},
+            enrollment_end_time = #{enrollmentEndTime},
+            start_time = #{startTime},
+            end_time = #{endTime},
+            cover_path = #{coverPath},
+            max_participants = #{maxParticipant},
+            status = #{status},
+            is_full = #{isFull},
+            duration = #{duration}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM activities WHERE id = #{id}
+    </delete>
+
+    <select id="selectAttachmentsByActivityId" resultType="java.lang.String">
+        SELECT path FROM activity_attachments WHERE activity_id = #{activityId}
+    </select>
+
+    <select id="selectParticipantsByActivityId" resultType="java.lang.String">
+        SELECT student_no FROM activity_participants WHERE activity_id = #{activityId}
+    </select>
+
+    <delete id="deleteAttachmentsByActivityId">
+        DELETE FROM activity_attachments WHERE activity_id = #{activityId}
+    </delete>
+
+    <delete id="deleteParticipantsByActivityId">
+        DELETE FROM activity_participants WHERE activity_id = #{activityId}
+    </delete>
+
+    <insert id="insertAttachments">
+        INSERT INTO activity_attachments(activity_id, path)
+        VALUES
+        <foreach collection="paths" item="p" separator=",">
+            (#{activityId}, #{p})
+        </foreach>
+    </insert>
+
+    <insert id="insertParticipants">
+        INSERT INTO activity_participants(activity_id, student_no)
+        VALUES
+        <foreach collection="studentNos" item="s" separator=",">
+            (#{activityId}, #{s})
+        </foreach>
+    </insert>
+
+    <select id="countParticipantsByActivityId" resultType="int">
+        SELECT COUNT(1) FROM activity_participants WHERE activity_id = #{activityId}
+    </select>
+
+    <select id="existsParticipant" resultType="int">
+        SELECT COUNT(1) FROM activity_participants WHERE activity_id = #{activityId} AND student_no = #{studentNo}
+    </select>
+
+    <insert id="insertParticipant">
+        INSERT INTO activity_participants(activity_id, student_no) VALUES (#{activityId}, #{studentNo})
+    </insert>
+
+</mapper>
