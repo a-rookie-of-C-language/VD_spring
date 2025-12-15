@@ -23,6 +23,7 @@ public class ActivityVO {
     @JsonProperty("EnrollmentEndTime")
     private OffsetDateTime enrollmentEndTime;
     private OffsetDateTime startTime;
+    private OffsetDateTime expectedEndTime;
     private OffsetDateTime endTime;
     @JsonProperty("CoverPath")
     private String coverPath;
@@ -46,6 +47,7 @@ public class ActivityVO {
                 .description(dto.getDescription())
                 .enrollmentStartTime(dto.getEnrollmentStartTime())
                 .enrollmentEndTime(dto.getEnrollmentEndTime())
+                .expectedEndTime(dto.getExpectedEndTime())
                 .startTime(dto.getStartTime())
                 .endTime(dto.getEndTime())
                 .coverPath(dto.getCoverPath())

@@ -12,6 +12,34 @@ spring:
       enabled: true
       max-file-size: 20MB
       max-request-size: 20MB
+  # Mail configuration for alerts
+  mail:
+    host: smtp.163.com
+    port: 25
+    username: ergr16976258@163.com
+    password: AAXVZdBKbVgDnSbG
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+    default-encoding: UTF-8
+
+# Actuator configuration for metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,env
+  endpoint:
+    health:
+      show-details: always
+  simple:
+    metrics:
+      export:
+        enabled: true
 
 app:
   upload:
@@ -20,4 +48,9 @@ app:
   security:
     jwt:
       secret: hzz.arookieofc-language.Elysia.Cyrene
-      expiry-minutes: 120
+      expiry-minutes: 2400
+  messaging:
+    # Enable immediate message triggering on startup for development/testing
+    # Set to true to trigger all status update messages immediately on startup with minimal delay
+    # Set to false for production to schedule messages for their actual time
+    dev-mode-trigger: true

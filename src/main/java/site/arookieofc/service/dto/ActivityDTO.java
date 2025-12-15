@@ -31,6 +31,7 @@ public class ActivityDTO {
     @JsonProperty("EnrollmentEndTime")
     private OffsetDateTime enrollmentEndTime;
     private OffsetDateTime startTime;
+    private OffsetDateTime expectedEndTime;
     private OffsetDateTime endTime;
     @JsonProperty("CoverPath")
     @Size(max = 255)
@@ -47,6 +48,8 @@ public class ActivityDTO {
     private ActivityStatus status;
     private Boolean isFull;
     private Double duration;
+    private String rejectedReason;
+    private Boolean imported;
 
     public Activity toEntity(java.time.ZoneId zone) {
         return site.arookieofc.dao.entity.Activity.builder()
@@ -58,12 +61,15 @@ public class ActivityDTO {
                 .enrollmentStartTime(this.enrollmentStartTime == null ? null : this.enrollmentStartTime.atZoneSameInstant(zone).toLocalDateTime())
                 .enrollmentEndTime(this.enrollmentEndTime == null ? null : this.enrollmentEndTime.atZoneSameInstant(zone).toLocalDateTime())
                 .startTime(this.startTime == null ? null : this.startTime.atZoneSameInstant(zone).toLocalDateTime())
+                .expectedEndTime(this.expectedEndTime == null ? null : this.expectedEndTime.atZoneSameInstant(zone).toLocalDateTime())
                 .endTime(this.endTime == null ? null : this.endTime.atZoneSameInstant(zone).toLocalDateTime())
                 .coverPath(this.coverPath)
                 .maxParticipant(this.maxParticipants)
                 .status(this.status)
                 .isFull(this.isFull != null ? this.isFull : false)
                 .duration(this.duration)
+                .rejectedReason(this.rejectedReason)
+                .imported(this.imported != null ? this.imported : false)
                 .build();
     }
 
@@ -77,12 +83,15 @@ public class ActivityDTO {
                 .enrollmentStartTime(this.enrollmentStartTime == null ? null : this.enrollmentStartTime.atZoneSameInstant(zone).toLocalDateTime())
                 .enrollmentEndTime(this.enrollmentEndTime == null ? null : this.enrollmentEndTime.atZoneSameInstant(zone).toLocalDateTime())
                 .startTime(this.startTime == null ? null : this.startTime.atZoneSameInstant(zone).toLocalDateTime())
+                .expectedEndTime(this.expectedEndTime == null ? null : this.expectedEndTime.atZoneSameInstant(zone).toLocalDateTime())
                 .endTime(this.endTime == null ? null : this.endTime.atZoneSameInstant(zone).toLocalDateTime())
                 .coverPath(this.coverPath)
                 .maxParticipant(this.maxParticipants)
                 .status(this.status)
                 .isFull(this.isFull != null ? this.isFull : false)
                 .duration(this.duration)
+                .rejectedReason(this.rejectedReason)
+                .imported(this.imported != null ? this.imported : false)
                 .build();
     }
 

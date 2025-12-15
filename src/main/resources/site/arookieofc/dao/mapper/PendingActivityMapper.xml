@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.PendingActivityMapper">
+
+    <resultMap id="PendingActivityResultMap" type="site.arookieofc.dao.entity.PendingActivity">
+        <id column="id" property="id"/>
+        <result column="functionary" property="functionary"/>
+        <result column="name" property="name"/>
+        <result column="type" property="type"/>
+        <result column="description" property="description"/>
+        <result column="duration" property="duration"/>
+        <result column="end_time" property="endTime"/>
+        <result column="cover_path" property="coverPath"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="submitted_by" property="submittedBy"/>
+        <collection property="attachment" ofType="java.lang.String" column="id" select="selectAttachmentsByPendingActivityId"/>
+        <collection property="participants" ofType="java.lang.String" column="id" select="selectParticipantsByPendingActivityId"/>
+    </resultMap>
+
+    <select id="getById" resultMap="PendingActivityResultMap">
+        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by
+        FROM pending_activities
+        WHERE id = #{id}
+    </select>
+
+    <select id="listAll" resultMap="PendingActivityResultMap">
+        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by
+        FROM pending_activities
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="listBySubmitter" resultMap="PendingActivityResultMap">
+        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by
+        FROM pending_activities
+        WHERE submitted_by = #{submittedBy}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="countFiltered" resultType="int">
+        SELECT COUNT(1)
+        FROM pending_activities
+        <where>
+            <if test="type != null">AND type = #{type}</if>
+            <if test="functionary != null and functionary != ''">AND functionary = #{functionary}</if>
+            <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
+            <if test="submittedBy != null and submittedBy != ''">AND submitted_by = #{submittedBy}</if>
+        </where>
+    </select>
+
+    <select id="listPaged" resultMap="PendingActivityResultMap">
+        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by
+        FROM pending_activities
+        <where>
+            <if test="type != null">AND type = #{type}</if>
+            <if test="functionary != null and functionary != ''">AND functionary = #{functionary}</if>
+            <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
+            <if test="submittedBy != null and submittedBy != ''">AND submitted_by = #{submittedBy}</if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <insert id="insert" parameterType="site.arookieofc.dao.entity.PendingActivity">
+        INSERT INTO pending_activities(
+            id, functionary, name, type, description, duration, end_time, cover_path, submitted_by
+        ) VALUES (
+            #{id}, #{functionary}, #{name}, #{type}, #{description}, #{duration}, #{endTime}, #{coverPath}, #{submittedBy}
+        )
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM pending_activities WHERE id = #{id}
+    </delete>
+
+    <select id="selectAttachmentsByPendingActivityId" resultType="java.lang.String">
+        SELECT path FROM pending_attachments WHERE pending_activity_id = #{pendingActivityId}
+    </select>
+
+    <select id="selectParticipantsByPendingActivityId" resultType="java.lang.String">
+        SELECT student_no FROM pending_participants WHERE pending_activity_id = #{pendingActivityId}
+    </select>
+
+    <delete id="deleteAttachmentsByPendingActivityId">
+        DELETE FROM pending_attachments WHERE pending_activity_id = #{pendingActivityId}
+    </delete>
+
+    <delete id="deleteParticipantsByPendingActivityId">
+        DELETE FROM pending_participants WHERE pending_activity_id = #{pendingActivityId}
+    </delete>
+
+    <insert id="insertAttachments">
+        INSERT INTO pending_attachments(pending_activity_id, path)
+        VALUES
+        <foreach collection="paths" item="p" separator=",">
+            (#{pendingActivityId}, #{p})
+        </foreach>
+    </insert>
+
+    <insert id="insertParticipants">
+        INSERT INTO pending_participants(pending_activity_id, student_no)
+        VALUES
+        <foreach collection="studentNos" item="s" separator=",">
+            (#{pendingActivityId}, #{s})
+        </foreach>
+    </insert>
+
+</mapper>
+

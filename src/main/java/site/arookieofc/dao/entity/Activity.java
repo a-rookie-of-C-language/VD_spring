@@ -7,6 +7,8 @@ import lombok.AllArgsConstructor;
 import lombok.AccessLevel;
 import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.service.BO.ActivityType;
+import site.arookieofc.service.dto.ActivityDTO;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -23,6 +25,7 @@ public class Activity {
     private LocalDateTime enrollmentStartTime;
     private LocalDateTime enrollmentEndTime;
     private LocalDateTime startTime;
+    private LocalDateTime expectedEndTime;
     private LocalDateTime endTime;
     private String coverPath;
     private Integer maxParticipant;
@@ -31,13 +34,16 @@ public class Activity {
     private ActivityStatus status;
     private Boolean isFull;
     private Double duration;
+    private String rejectedReason;
+    private Boolean imported;
 
-    public site.arookieofc.service.dto.ActivityDTO toDTO(java.time.ZoneId zone) {
+    public ActivityDTO toDTO(java.time.ZoneId zone) {
         java.time.OffsetDateTime est = enrollmentStartTime == null ? null : enrollmentStartTime.atZone(zone).toOffsetDateTime();
         java.time.OffsetDateTime eet = enrollmentEndTime == null ? null : enrollmentEndTime.atZone(zone).toOffsetDateTime();
         java.time.OffsetDateTime st = startTime == null ? null : startTime.atZone(zone).toOffsetDateTime();
+        java.time.OffsetDateTime eet2 = expectedEndTime == null ? null : expectedEndTime.atZone(zone).toOffsetDateTime();
         java.time.OffsetDateTime et = endTime == null ? null : endTime.atZone(zone).toOffsetDateTime();
-        return site.arookieofc.service.dto.ActivityDTO.builder()
+        return ActivityDTO.builder()
                 .id(id)
                 .functionary(functionary)
                 .name(name)
@@ -46,6 +52,7 @@ public class Activity {
                 .enrollmentStartTime(est)
                 .enrollmentEndTime(eet)
                 .startTime(st)
+                .expectedEndTime(eet2)
                 .endTime(et)
                 .coverPath(coverPath)
                 .maxParticipants(maxParticipant)
@@ -54,6 +61,8 @@ public class Activity {
                 .status(status)
                 .isFull(isFull)
                 .duration(duration)
+                .rejectedReason(rejectedReason)
+                .imported(imported)
                 .build();
     }
 }

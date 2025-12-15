@@ -11,12 +11,15 @@
         <result column="enrollment_start_time" property="enrollmentStartTime"/>
         <result column="enrollment_end_time" property="enrollmentEndTime"/>
         <result column="start_time" property="startTime"/>
+        <result column="expected_end_time" property="expectedEndTime"/>
         <result column="end_time" property="endTime"/>
         <result column="cover_path" property="coverPath"/>
         <result column="max_participants" property="maxParticipant"/>
         <result column="status" property="status"/>
         <result column="is_full" property="isFull"/>
         <result column="duration" property="duration"/>
+        <result column="rejected_reason" property="rejectedReason"/>
+        <result column="imported" property="imported"/>
         <collection property="attachment" ofType="java.lang.String" column="id" select="selectAttachmentsByActivityId"/>
         <collection property="participants" ofType="java.lang.String" column="id" select="selectParticipantsByActivityId"/>
     </resultMap>
@@ -24,7 +27,8 @@
     <select id="getById" resultMap="ActivityResultMap">
         SELECT id, functionary, name, type, description,
                enrollment_start_time, enrollment_end_time,
-               start_time, end_time, cover_path, max_participants, status, is_full, duration
+               start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
+               rejected_reason, imported
         FROM activities
         WHERE id = #{id}
     </select>
@@ -32,7 +36,8 @@
   <select id="listAll" resultMap="ActivityResultMap">
         SELECT id, functionary, name, type, description,
                enrollment_start_time, enrollment_end_time,
-               start_time, end_time, cover_path, max_participants, status, is_full, duration
+               start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
+               rejected_reason, imported
         FROM activities
         ORDER BY start_time DESC
   </select>
@@ -55,7 +60,8 @@
   <select id="listPaged" resultMap="ActivityResultMap">
     SELECT id, functionary, name, type, description,
            enrollment_start_time, enrollment_end_time,
-           start_time, end_time, cover_path, max_participants, status, is_full, duration
+           start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
+           rejected_reason, imported
     FROM activities
     <where>
       <if test="type != null">AND type = #{type}</if>
@@ -75,11 +81,11 @@
         INSERT INTO activities(
             id, functionary, name, type, description,
             enrollment_start_time, enrollment_end_time,
-            start_time, end_time, cover_path, max_participants, status, is_full, duration
+            start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration
         ) VALUES (
             #{id}, #{functionary}, #{name}, #{type}, #{description},
             #{enrollmentStartTime}, #{enrollmentEndTime},
-            #{startTime}, #{endTime}, #{coverPath}, #{maxParticipant}, #{status}, #{isFull}, #{duration}
+            #{startTime}, #{expectedEndTime}, #{endTime}, #{coverPath}, #{maxParticipant}, #{status}, #{isFull}, #{duration}
         )
     </insert>
 
@@ -92,12 +98,25 @@
             enrollment_start_time = #{enrollmentStartTime},
             enrollment_end_time = #{enrollmentEndTime},
             start_time = #{startTime},
+            expected_end_time = #{expectedEndTime},
             end_time = #{endTime},
             cover_path = #{coverPath},
             max_participants = #{maxParticipant},
             status = #{status},
             is_full = #{isFull},
             duration = #{duration}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE activities SET
+            status = #{status, jdbcType=VARCHAR}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateRejectedReason">
+        UPDATE activities SET
+            rejected_reason = #{reason, jdbcType=VARCHAR}
         WHERE id = #{id}
     </update>
 
@@ -145,8 +164,32 @@
         SELECT COUNT(1) FROM activity_participants WHERE activity_id = #{activityId} AND student_no = #{studentNo}
     </select>
 
-    <insert id="insertParticipant">
-        INSERT INTO activity_participants(activity_id, student_no) VALUES (#{activityId}, #{studentNo})
-    </insert>
+  <insert id="insertParticipant">
+      INSERT INTO activity_participants(activity_id, student_no) VALUES (#{activityId}, #{studentNo})
+  </insert>
+
+  <delete id="deleteParticipant">
+      DELETE FROM activity_participants WHERE activity_id = #{activityId} AND student_no = #{studentNo}
+  </delete>
+
+    <select id="getActivitiesByStudentNo" resultMap="ActivityResultMap">
+        SELECT a.id, a.functionary, a.name, a.type, a.description,
+               a.enrollment_start_time, a.enrollment_end_time,
+               a.start_time, a.expected_end_time, a.end_time, a.cover_path, a.max_participants, a.status, a.is_full, a.duration,
+               a.rejected_reason, a.imported
+        FROM activities a
+        INNER JOIN activity_participants ap ON a.id = ap.activity_id
+        WHERE ap.student_no = #{studentNo}
+        ORDER BY a.expected_end_time DESC
+    </select>
+    
+    <select id="countByType" resultType="java.util.HashMap">
+        SELECT 
+            type,
+            COUNT(*) as count
+        FROM activities
+        GROUP BY type
+        ORDER BY count DESC
+    </select>
 
 </mapper>

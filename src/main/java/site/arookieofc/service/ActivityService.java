@@ -13,6 +13,7 @@ import site.arookieofc.dao.entity.Activity;
 import site.arookieofc.dao.mapper.ActivityMapper;
 import site.arookieofc.service.BO.ActivityType;
 import site.arookieofc.service.dto.ActivityDTO;
+import site.arookieofc.service.messaging.ActivityStartupSynchronizer;
 import site.arookieofc.service.messaging.ActivityStatusUpdateMessage;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import site.arookieofc.configuration.RabbitConfig;
@@ -41,6 +42,46 @@ public class ActivityService {
                                 .readCoverImageAsDataUrl(d.getCoverPath()));
                     }
                 }).collect(Collectors.toList());
+    }
+
+    public int refreshStatusesAndUpdate() {
+        List<Activity> activities = activityMapper.listAll();
+        int updated = 0;
+        for (Activity a : activities) {
+            if (a.getStatus() == ActivityStatus.ActivityEnded || a.getStatus() == ActivityStatus.FailReview || a.getStatus() == ActivityStatus.UnderReview) {
+                continue;
+            }
+            ActivityStatus old = a.getStatus();
+            site.arookieofc.service.messaging.ActivityStartupSynchronizer.changeStatus(a, ZONE);
+            if (old != a.getStatus()) {
+                activityMapper.updateStatus(a.getId(), a.getStatus());
+                updated++;
+            }
+        }
+        return updated;
+    }
+
+    public List<ActivityDTO> getActivitiesByStudentNo(String studentNo) {
+        return activityMapper.getActivitiesByStudentNo(studentNo).stream()
+                .map(a -> a.toDTO(ZONE))
+                .peek(d -> {
+                    if (d.getCoverPath() != null && !d.getCoverPath().isEmpty()) {
+                        d.setCoverImage(fileUploadService
+                                .readCoverImageAsDataUrl(d.getCoverPath()));
+                    }
+                }).collect(Collectors.toList());
+    }
+
+    public ActivityDTO getActivityById(String id) {
+        Activity activity = activityMapper.getById(id);
+        if (activity == null) {
+            throw new IllegalArgumentException("NOT_FOUND");
+        }
+        ActivityDTO dto = activity.toDTO(ZONE);
+        if (dto.getCoverPath() != null && !dto.getCoverPath().isEmpty()) {
+            dto.setCoverImage(fileUploadService.readCoverImageAsDataUrl(dto.getCoverPath()));
+        }
+        return dto;
     }
 
     public int countActivities(ActivityType type, ActivityStatus status,
@@ -147,8 +188,24 @@ public class ActivityService {
         if (dto.getAttachment() != null && !dto.getAttachment().isEmpty()) {
             activityMapper.insertAttachments(id, dto.getAttachment());
         }
+        
+        // Automatically add functionary as participant
+        String functionary = dto.getFunctionary();
+        if (functionary != null && !functionary.isEmpty()) {
+            activityMapper.insertParticipant(id, functionary);
+        }
+        
+        // Add other participants (skip functionary if already in list)
         if (dto.getParticipants() != null && !dto.getParticipants().isEmpty()) {
-            activityMapper.insertParticipants(id, dto.getParticipants());
+            for (String participant : dto.getParticipants()) {
+                if (!participant.equals(functionary)) {
+                    // Check if participant already exists to avoid duplicates
+                    int exists = activityMapper.existsParticipant(id, participant);
+                    if (exists == 0) {
+                        activityMapper.insertParticipant(id, participant);
+                    }
+                }
+            }
         }
         return getActivityDTO(id);
     }
@@ -172,6 +229,13 @@ public class ActivityService {
 
     @Transactional
     public ActivityDTO updateActivity(String id, @Valid ActivityDTO dto) {
+        Activity current = activityMapper.getById(id);
+        if (current == null) {
+            throw new IllegalArgumentException("NOT_FOUND");
+        }
+        if (current.getStatus() != ActivityStatus.UnderReview && current.getStatus() != ActivityStatus.FailReview) {
+            throw new IllegalArgumentException("REVIEW_PASSED");
+        }
         try {
             MultipartFile coverFile = dto.getCoverFile();
             if (coverFile != null && !coverFile.isEmpty()) {
@@ -182,6 +246,7 @@ public class ActivityService {
             throw new IllegalArgumentException("Cover file upload failed: " + e.getMessage(), e);
         }
         Activity entity = dto.toEntity(id, ZONE);
+
         activityMapper.update(entity);
         scheduleStatusMessages(entity);
         if (dto.getAttachment() != null) {
@@ -197,6 +262,10 @@ public class ActivityService {
             }
         }
         return getActivityDTO(id);
+    }
+
+    private void refreshStatus(Activity a) {
+        ActivityStartupSynchronizer.changeStatus(a, ZONE);
     }
 
     @Transactional
@@ -223,7 +292,7 @@ public class ActivityService {
         activityMapper.insertParticipant(activityId, studentNo);
         int after = cnt + 1;
         boolean full = act.getMaxParticipant() != null && after >= act.getMaxParticipant();
-        if (full && !java.util.Objects.equals(act.getIsFull(), true)) {
+        if (full && !Objects.equals(act.getIsFull(), true)) {
             Activity updated = activityMapper.getById(activityId);
             updated.setIsFull(true);
             activityMapper.update(updated);
@@ -232,13 +301,45 @@ public class ActivityService {
     }
 
     @Transactional
-    public ActivityDTO reviewActivity(String id, boolean approve) {
+    public String unenroll(String activityId, String studentNo) {
+        Activity act = activityMapper.getById(activityId);
+        if (act == null) {
+            return "NOT_FOUND";
+        }
+        // Prevent functionary from leaving their own activity
+        if (studentNo.equals(act.getFunctionary())) {
+            return "FUNCTIONARY_CANNOT_UNENROLL";
+        }
+        LocalDateTime now = LocalDateTime.now(ZONE);
+        LocalDateTime enrollmentEnd = act.getEnrollmentEndTime();
+        if (enrollmentEnd == null || !now.isBefore(enrollmentEnd)) {
+            return "ENROLLMENT_ENDED";
+        }
+        int exists = activityMapper.existsParticipant(activityId, studentNo);
+        if (exists == 0) {
+            return "NOT_ENROLLED";
+        }
+        activityMapper.deleteParticipant(activityId, studentNo);
+        // Update isFull if needed
+        int cnt = activityMapper.countParticipantsByActivityId(activityId);
+        boolean full = act.getMaxParticipant() != null && cnt >= act.getMaxParticipant();
+        if (Boolean.TRUE.equals(act.getIsFull()) && !full) {
+            Activity updated = activityMapper.getById(activityId);
+            updated.setIsFull(false);
+            activityMapper.update(updated);
+        }
+        return "OK";
+    }
+
+    @Transactional
+    public ActivityDTO reviewActivity(String id, boolean approve, String reason) {
         Activity a = activityMapper.getById(id);
         if (a == null) {
             throw new IllegalArgumentException("NOT_FOUND");
         }
         if (!approve) {
             a.setStatus(ActivityStatus.FailReview);
+            a.setRejectedReason(reason);
             activityMapper.update(a);
             return getActivityDTO(id);
         }
@@ -248,14 +349,16 @@ public class ActivityService {
         if (est == null || eet == null) {
             throw new IllegalArgumentException("INVALID_TIME");
         }
-        if (now.isBefore(est)) {
-            a.setStatus(ActivityStatus.EnrollmentNotStart);
-        } else if (now.isBefore(eet)) {
-            a.setStatus(ActivityStatus.EnrollmentStarted);
-        } else {
+        if (now.isAfter(eet)) {
             throw new IllegalArgumentException("ENROLLMENT_PASSED");
         }
+        
+        // Clear rejected reason on approval
+        a.setRejectedReason(null);
+        // Use refreshStatus to set the correct status based on current time
+        refreshStatus(a);
         activityMapper.update(a);
+        scheduleStatusMessages(a);
         return getActivityDTO(id);
     }
 
@@ -288,7 +391,7 @@ public class ActivityService {
         if (delayMs <= 0) return;
         ActivityStatusUpdateMessage msg = new ActivityStatusUpdateMessage(id, status);
         MessageProperties props = new MessageProperties();
-        props.setExpiration(String.valueOf(delayMs));
+        props.setHeader("x-delay", delayMs);
         props.setContentType(MessageProperties.CONTENT_TYPE_JSON);
         byte[] body;
         try {

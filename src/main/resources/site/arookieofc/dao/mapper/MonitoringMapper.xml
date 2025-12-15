@@ -1,0 +1,286 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.MonitoringMapper">
+
+    <!-- 获取总用户数 -->
+    <select id="countTotalUsers" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM users
+    </select>
+
+    <!-- 获取总活动数 -->
+    <select id="countTotalActivities" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM activities
+    </select>
+
+    <!-- 获取已完成活动数 -->
+    <select id="countCompletedActivities" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM activities WHERE status = 'ActivityEnded'
+    </select>
+
+    <!-- 获取总志愿时长（所有用户total_hours之和） -->
+    <select id="sumTotalDuration" resultType="java.lang.Double">
+        SELECT COALESCE(SUM(total_hours), 0) FROM users
+    </select>
+
+    <!-- 获取总参与人次 -->
+    <select id="countTotalParticipants" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM activity_participants
+    </select>
+
+    <!-- 获取指定时间范围内新增的活动数 -->
+    <select id="countNewActivities" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM activities
+        WHERE start_time &gt;= #{startTime}
+          AND start_time &lt;= #{endTime}
+    </select>
+
+    <!-- 获取指定时间范围内的活跃用户数（参与了活动的用户数） -->
+    <select id="countActiveUsers" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT ap.student_no)
+        FROM activity_participants ap
+        INNER JOIN activities a ON ap.activity_id = a.id
+        WHERE a.start_time &gt;= #{startTime}
+          AND a.start_time &lt;= #{endTime}
+    </select>
+
+    <!-- 按活动类型分组统计 -->
+    <select id="countByActivityType" resultType="java.util.HashMap">
+        SELECT
+            type,
+            COUNT(*) as count
+        FROM activities
+        GROUP BY type
+        ORDER BY count DESC
+    </select>
+
+    <!-- 获取志愿时长Top N用户 -->
+    <select id="getTopUsersByHours" resultType="java.util.HashMap">
+        SELECT
+            student_no as studentNo,
+            username as name,
+            COALESCE(total_hours, 0) as hours
+        FROM users
+        WHERE total_hours > 0
+        ORDER BY total_hours DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 按日期统计新增活动数（按天分组） -->
+    <select id="countNewActivitiesByDate" resultType="java.util.HashMap">
+        SELECT
+            DATE(start_time) as date,
+            COUNT(*) as count
+        FROM activities
+        WHERE start_time &gt;= #{startTime}
+          AND start_time &lt;= #{endTime}
+        GROUP BY DATE(start_time)
+        ORDER BY date
+    </select>
+
+    <!-- 按日期统计活跃用户数（按天分组） -->
+    <select id="countActiveUsersByDate" resultType="java.util.HashMap">
+        SELECT
+            DATE(a.start_time) as date,
+            COUNT(DISTINCT ap.student_no) as count
+        FROM activity_participants ap
+        INNER JOIN activities a ON ap.activity_id = a.id
+        WHERE a.start_time &gt;= #{startTime}
+          AND a.start_time &lt;= #{endTime}
+        GROUP BY DATE(a.start_time)
+        ORDER BY date
+    </select>
+
+    <!-- 按日期统计完成活动数（按天分组） -->
+    <select id="countCompletedActivitiesByDate" resultType="java.util.HashMap">
+        SELECT
+            DATE(end_time) as date,
+            COUNT(*) as count
+        FROM activities
+        WHERE status = 'ActivityEnded'
+          AND end_time &gt;= #{startTime}
+          AND end_time &lt;= #{endTime}
+        GROUP BY DATE(end_time)
+        ORDER BY date
+    </select>
+
+    <!-- 获取指定时间范围内的新用户数 -->
+    <select id="countNewUsers" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM users
+        WHERE created_at &gt;= #{startTime}
+          AND created_at &lt;= #{endTime}
+    </select>
+
+    <!-- 获取指定时间范围内完成的活动数 -->
+    <select id="countCompletedActivitiesInRange" resultType="java.lang.Long">
+        SELECT COUNT(*) FROM activities
+        WHERE status = 'ActivityEnded'
+          AND end_time &gt;= #{startTime}
+          AND end_time &lt;= #{endTime}
+    </select>
+
+    <!-- 按年级统计用户志愿数据 -->
+    <select id="getStatisticsByGrade" resultType="java.util.HashMap">
+        SELECT
+            u.grade as name,
+            COUNT(DISTINCT u.student_no) as userCount,
+            COUNT(DISTINCT ap.activity_id) as activityCount,
+            COALESCE(SUM(u.total_hours), 0) as totalHours,
+            COALESCE(AVG(u.total_hours), 0) as averageHours
+        FROM users u
+        LEFT JOIN activity_participants ap ON u.student_no = ap.student_no
+        WHERE u.grade IS NOT NULL AND u.grade != ''
+        GROUP BY u.grade
+        ORDER BY totalHours DESC
+    </select>
+
+    <!-- 按学院统计用户志愿数据 -->
+    <select id="getStatisticsByCollege" resultType="java.util.HashMap">
+        SELECT
+            u.college as name,
+            COUNT(DISTINCT u.student_no) as userCount,
+            COUNT(DISTINCT ap.activity_id) as activityCount,
+            COALESCE(SUM(u.total_hours), 0) as totalHours,
+            COALESCE(AVG(u.total_hours), 0) as averageHours
+        FROM users u
+        LEFT JOIN activity_participants ap ON u.student_no = ap.student_no
+        WHERE u.college IS NOT NULL AND u.college != ''
+        GROUP BY u.college
+        ORDER BY totalHours DESC
+    </select>
+
+    <!-- 按班级统计用户志愿数据（Top N） -->
+    <select id="getStatisticsByClazz" resultType="java.util.HashMap">
+        SELECT
+            u.clazz as name,
+            COUNT(DISTINCT u.student_no) as userCount,
+            COUNT(DISTINCT ap.activity_id) as activityCount,
+            COALESCE(SUM(u.total_hours), 0) as totalHours,
+            COALESCE(AVG(u.total_hours), 0) as averageHours
+        FROM users u
+        LEFT JOIN activity_participants ap ON u.student_no = ap.student_no
+        WHERE u.clazz IS NOT NULL AND u.clazz != ''
+        GROUP BY u.clazz
+        ORDER BY totalHours DESC
+        LIMIT #{limit}
+    </select>
+
+    <!-- 获取所有不重复的学院列表 -->
+    <select id="getDistinctColleges" resultType="java.lang.String">
+        SELECT DISTINCT college
+        FROM users
+        WHERE college IS NOT NULL AND college != ''
+        ORDER BY college
+    </select>
+
+    <!-- 获取所有不重复的年级列表 -->
+    <select id="getDistinctGrades" resultType="java.lang.String">
+        SELECT DISTINCT grade
+        FROM users
+        WHERE grade IS NOT NULL AND grade != ''
+        ORDER BY grade DESC
+    </select>
+
+    <!-- 获取所有不重复的班级列表 -->
+    <select id="getDistinctClazzes" resultType="java.lang.String">
+        SELECT DISTINCT clazz
+        FROM users
+        WHERE clazz IS NOT NULL AND clazz != ''
+        ORDER BY clazz
+    </select>
+
+    <!-- 根据筛选条件统计用户数量 -->
+    <select id="countUsersByFilter" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM users
+        <where>
+            <if test="college != null and college != ''">
+                AND college = #{college}
+            </if>
+            <if test="grade != null and grade != ''">
+                AND grade = #{grade}
+            </if>
+            <if test="clazz != null and clazz != ''">
+                AND clazz = #{clazz}
+            </if>
+        </where>
+    </select>
+
+    <!-- 根据筛选条件统计总志愿时长 -->
+    <select id="sumDurationByFilter" resultType="java.lang.Double">
+        SELECT COALESCE(SUM(total_hours), 0)
+        FROM users
+        <where>
+            <if test="college != null and college != ''">
+                AND college = #{college}
+            </if>
+            <if test="grade != null and grade != ''">
+                AND grade = #{grade}
+            </if>
+            <if test="clazz != null and clazz != ''">
+                AND clazz = #{clazz}
+            </if>
+        </where>
+    </select>
+
+    <!-- 根据筛选条件统计参加活动人次 -->
+    <select id="countParticipantsByFilter" resultType="java.lang.Long">
+        SELECT COUNT(DISTINCT ap.id)
+        FROM activity_participants ap
+        INNER JOIN users u ON ap.student_no = u.student_no
+        <where>
+            <if test="college != null and college != ''">
+                AND u.college = #{college}
+            </if>
+            <if test="grade != null and grade != ''">
+                AND u.grade = #{grade}
+            </if>
+            <if test="clazz != null and clazz != ''">
+                AND u.clazz = #{clazz}
+            </if>
+        </where>
+    </select>
+
+    <!-- 根据筛选条件分页获取用户统计详情 -->
+    <select id="getUserStatsByFilter" resultType="java.util.HashMap">
+        SELECT
+            u.student_no as studentNo,
+            u.username as name,
+            u.college as college,
+            u.grade as grade,
+            u.clazz as clazz,
+            COALESCE(u.total_hours, 0) as totalDuration,
+            COUNT(DISTINCT ap.activity_id) as activityCount
+        FROM users u
+        LEFT JOIN activity_participants ap ON u.student_no = ap.student_no
+        <where>
+            <if test="college != null and college != ''">
+                AND u.college = #{college}
+            </if>
+            <if test="grade != null and grade != ''">
+                AND u.grade = #{grade}
+            </if>
+            <if test="clazz != null and clazz != ''">
+                AND u.clazz = #{clazz}
+            </if>
+        </where>
+        GROUP BY u.student_no, u.username, u.college, u.grade, u.clazz, u.total_hours
+        <choose>
+            <when test="sortField == 'duration' or sortField == 'totalDuration'">
+                ORDER BY totalDuration
+                <if test="sortOrder == 'desc'">DESC</if>
+                <if test="sortOrder != 'desc'">ASC</if>
+            </when>
+            <when test="sortField == 'activityCount'">
+                ORDER BY activityCount
+                <if test="sortOrder == 'desc'">DESC</if>
+                <if test="sortOrder != 'desc'">ASC</if>
+            </when>
+            <otherwise>
+                ORDER BY totalDuration DESC
+            </otherwise>
+        </choose>
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+</mapper>
+

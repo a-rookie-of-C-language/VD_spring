@@ -17,6 +17,9 @@ public class User {
     private Role role;
     private Double totalHours;
     private LocalDateTime createdAt;
+    private String clazz;      // 班级
+    private String grade;      // 年级
+    private String college;    // 学院
 
     public UserDTO toUserDTO() {
         return UserDTO
@@ -27,6 +30,9 @@ public class User {
                 .role(role)
                 .totalHours(totalHours)
                 .createdAt(createdAt == null ? null : createdAt.atZone(ZoneId.of("Asia/Shanghai")).toOffsetDateTime())
+                .clazz(clazz)
+                .grade(grade)
+                .college(college)
                 .build();
     }
 }

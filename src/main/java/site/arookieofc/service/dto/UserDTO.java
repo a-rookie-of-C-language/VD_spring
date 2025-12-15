@@ -14,4 +14,7 @@ public class UserDTO {
     private Role role;
     private Double totalHours;
     private OffsetDateTime createdAt;
+    private String clazz;      // 班级
+    private String grade;      // 年级
+    private String college;    // 学院
 }

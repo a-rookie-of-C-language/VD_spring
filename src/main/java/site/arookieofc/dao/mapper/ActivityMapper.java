@@ -18,6 +18,10 @@ public interface ActivityMapper {
 
     int update(Activity activity);
 
+    int updateStatus(@Param("id") String id, @Param("status") ActivityStatus status);
+
+    int updateRejectedReason(@Param("id") String id, @Param("reason") String reason);
+
     int delete(@Param("id") String id);
 
     List<String> selectAttachmentsByActivityId(@Param("activityId") String activityId);
@@ -38,6 +42,8 @@ public interface ActivityMapper {
 
     int insertParticipant(@Param("activityId") String activityId, @Param("studentNo") String studentNo);
 
+    int deleteParticipant(@Param("activityId") String activityId, @Param("studentNo") String studentNo);
+
     int countFiltered(@Param("type") ActivityType type,
                       @Param("status") ActivityStatus status,
                       @Param("functionary") String functionary,
@@ -57,4 +63,12 @@ public interface ActivityMapper {
                              @Param("excludeHidden") Boolean excludeHidden,
                              @Param("pageSize") int pageSize,
                              @Param("offset") int offset);
+
+    List<Activity> getActivitiesByStudentNo(@Param("studentNo") String studentNo);
+    
+    /**
+     * Count activities by type for distribution chart
+     * Returns list of {type, count}
+     */
+    List<java.util.Map<String, Object>> countByType();
 }

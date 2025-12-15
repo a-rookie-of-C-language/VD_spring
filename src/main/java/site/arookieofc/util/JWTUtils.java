@@ -1,9 +1,12 @@
 package site.arookieofc.util;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.security.SignatureException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
@@ -66,4 +69,31 @@ public final class JWTUtils {
         Date exp = parseToken(token).getExpiration();
         return exp != null && exp.before(new Date());
     }
+
+    /**
+     * 安全解析Token，返回包含详细错误信息的结果
+     * 前端可根据message字段获取具体的错误原因
+     */
+    public static TokenParseResult parseTokenSafe(String token) {
+        if (token == null || token.trim().isEmpty()) {
+            return TokenParseResult.empty();
+        }
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(Keys.hmacShaKeyFor(SECRET_BYTES))
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            return TokenParseResult.success(claims);
+        } catch (ExpiredJwtException e) {
+            return TokenParseResult.expired();
+        } catch (MalformedJwtException e) {
+            return TokenParseResult.malformed();
+        } catch (SignatureException e) {
+            return TokenParseResult.signatureInvalid();
+        } catch (Exception e) {
+            return TokenParseResult.invalid();
+        }
+    }
 }
+
