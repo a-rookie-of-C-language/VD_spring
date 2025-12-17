@@ -4,7 +4,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 import site.arookieofc.dao.entity.Activity;
 import site.arookieofc.dao.entity.PendingActivity;
 import site.arookieofc.dao.mapper.ActivityMapper;
@@ -16,14 +15,10 @@ import site.arookieofc.service.dto.ActivityImportDTO;
 import site.arookieofc.service.dto.PendingActivityDTO;
 
 import java.io.IOException;
-import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/**
- * Service for managing pending activities awaiting admin approval
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -33,15 +28,8 @@ public class PendingActivityService {
     private final UserMapper userMapper;
     private final FileUploadService fileUploadService;
     private final ExcelParserService excelParserService;
+    private final VolunteerHourGrantService volunteerHourGrantService;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
-
-    /**
-     * Import activity - creates pending activity for admin review
-     * @param dto Import DTO
-     * @param submittedBy Student number of submitter
-     * @param isAdmin Whether submitter is admin
-     * @return Created activity or pending activity ID
-     */
     @Transactional
     public String importActivity(ActivityImportDTO dto, String submittedBy, boolean isAdmin) {
         // Parse participants from both array and Excel file
@@ -103,7 +91,6 @@ public class PendingActivityService {
                     .status(ActivityStatus.ActivityEnded)
                     .isFull(true)
                     .imported(true)
-                    // Set all time fields to endTime for imported activities
                     .enrollmentStartTime(dto.getEndTime().atZoneSameInstant(ZONE).toLocalDateTime())
                     .enrollmentEndTime(dto.getEndTime().atZoneSameInstant(ZONE).toLocalDateTime())
                     .startTime(dto.getEndTime().atZoneSameInstant(ZONE).toLocalDateTime())
@@ -122,8 +109,17 @@ public class PendingActivityService {
                 activityMapper.insertAttachments(activityId, dto.getAttachment());
             }
 
+            // Grant hours to all participants using unified grant service
+            if (!allParticipants.isEmpty()) {
+                volunteerHourGrantService.grantHoursForImportedActivity(
+                        activityId,
+                        allParticipants,
+                        dto.getDuration(),
+                        dto.getName()
+                );
+            }
+
             log.info("Admin directly imported activity: {}", activityId);
-            return activityId;
         } else {
             // For functionary, create pending activity
             PendingActivity pendingActivity = PendingActivity.builder()
@@ -151,13 +147,10 @@ public class PendingActivityService {
             }
 
             log.info("Functionary submitted pending activity: {}", activityId);
-            return activityId;
         }
+        return activityId;
     }
 
-    /**
-     * Get pending activity by ID
-     */
     public PendingActivityDTO getPendingActivityById(String id) {
         PendingActivity entity = pendingActivityMapper.getById(id);
         if (entity == null) {
@@ -170,9 +163,6 @@ public class PendingActivityService {
         return dto;
     }
 
-    /**
-     * List all pending activities (for admin)
-     */
     public List<PendingActivityDTO> listAllPendingActivities() {
         return pendingActivityMapper.listAll().stream()
                 .map(entity -> {
@@ -214,11 +204,13 @@ public class PendingActivityService {
      * Approve pending activity - convert to actual activity
      */
     @Transactional
-    public String approvePendingActivity(String id) {
+    public String approvePendingActivity(String id, String reviewerStudentNo) {
         PendingActivity pending = pendingActivityMapper.getById(id);
         if (pending == null) {
             throw new IllegalArgumentException("NOT_FOUND");
         }
+
+        java.time.LocalDateTime reviewedAt = java.time.LocalDateTime.now(ZONE);
 
         // Create actual activity
         Activity activity = Activity.builder()
@@ -239,6 +231,8 @@ public class PendingActivityService {
                 .enrollmentEndTime(pending.getEndTime())
                 .startTime(pending.getEndTime())
                 .expectedEndTime(pending.getEndTime())
+                .reviewedAt(reviewedAt)
+                .reviewedBy(reviewerStudentNo)
                 .build();
 
         activityMapper.insert(activity);
@@ -253,10 +247,20 @@ public class PendingActivityService {
             activityMapper.insertAttachments(id, pending.getAttachment());
         }
 
+        // Grant hours to all participants using unified grant service
+        if (pending.getParticipants() != null && !pending.getParticipants().isEmpty()) {
+            volunteerHourGrantService.grantHoursForImportedActivity(
+                    id,
+                    pending.getParticipants(),
+                    pending.getDuration(),
+                    pending.getName()
+            );
+        }
+
         // Delete pending activity
         deletePendingActivity(id);
 
-        log.info("Approved pending activity: {}", id);
+        log.info("Approved pending activity: {} by reviewer: {}", id, reviewerStudentNo);
         return id;
     }
 
@@ -264,7 +268,7 @@ public class PendingActivityService {
      * Reject pending activity - delete and clean up
      */
     @Transactional
-    public void rejectPendingActivity(String id, String reason) {
+    public void rejectPendingActivity(String id, String reason, String reviewerStudentNo) {
         PendingActivity pending = pendingActivityMapper.getById(id);
         if (pending == null) {
             throw new IllegalArgumentException("NOT_FOUND");
@@ -278,7 +282,7 @@ public class PendingActivityService {
         // Delete pending activity (cascades to participants and attachments)
         deletePendingActivity(id);
 
-        log.info("Rejected pending activity: {} with reason: {}", id, reason);
+        log.info("Rejected pending activity: {} with reason: {} by reviewer: {}", id, reason, reviewerStudentNo);
     }
 
     /**

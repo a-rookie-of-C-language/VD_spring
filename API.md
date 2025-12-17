@@ -699,6 +699,213 @@ curl -X POST -H "Authorization: Bearer <FUNCTIONARY_TOKEN>" \
 }
 ```
 
+## 个人志愿时长申请（Personal Hour Request）
+
+### 数据结构
+#### PersonalHourRequest
+```json
+{
+  "id": "string",
+  "applicantStudentNo": "string",     // 申请人学号
+  "applicantName": "string",          // 申请人姓名
+  "name": "string",                   // 活动名称
+  "functionary": "string",            // 证明人/负责人姓名
+  "type": "ActivityType",             // 活动类型
+  "description": "string",            // 活动简述
+  "startTime": "OffsetDateTime",      // 活动开始时间
+  "endTime": "OffsetDateTime",        // 活动结束时间
+  "duration": 2.5,                    // 申请时长（小时）
+  "status": "RequestStatus",          // 审核状态
+  "rejectedReason": "string",         // 拒绝理由（仅当status=REJECTED时有值）
+  "createdAt": "OffsetDateTime",      // 申请时间
+  "reviewedAt": "OffsetDateTime",     // 审核时间
+  "reviewedBy": "string",             // 审核人学号
+  "attachments": ["string"]           // 证明材料路径列表
+}
+```
+
+#### RequestStatus（申请状态枚举）
+- `PENDING`：审核中
+- `APPROVED`：已通过
+- `REJECTED`：已拒绝
+
+### 提交个人时长申请
+- `POST /api/activities/request_hours`
+- Content-Type: `multipart/form-data`
+- 请求头：`Authorization: Bearer <JWT_TOKEN>`（必需）
+- 表单字段：
+  - `name`（必需）：活动名称
+  - `functionary`（必需）：证明人/负责人姓名
+  - `type`（必需）：活动类型（ActivityType枚举值）
+  - `description`：活动简述
+  - `startTime`（必需）：活动开始时间（ISO-8601 OffsetDateTime）
+  - `endTime`（必需）：活动结束时间（ISO-8601 OffsetDateTime）
+  - `duration`（必需）：申请时长（小时）
+  - `files`：证明材料文件（支持多个图片/文档）
+- 行为：创建一个待审核的个人时长申请
+- 响应：
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "success": true,
+    "message": "申请已提交，等待审核",
+    "data": { /* PersonalHourRequest */ }
+  }
+}
+```
+- 示例：
+```bash
+curl -X POST -H "Authorization: Bearer <JWT_TOKEN>" \
+  -F "name=社区志愿服务" \
+  -F "functionary=张老师" \
+  -F "type=COMMUNITY_SERVICE" \
+  -F "description=参与街道清洁活动" \
+  -F "startTime=2025-12-10T09:00:00+08:00" \
+  -F "endTime=2025-12-10T12:00:00+08:00" \
+  -F "duration=3" \
+  -F "files=@/path/to/proof1.jpg" \
+  -F "files=@/path/to/proof2.jpg" \
+  http://localhost:8080/api/activities/request_hours
+```
+
+### 获取待审核申请列表（管理员）
+- `GET /api/activities/pending_requests`
+- 请求头：`Authorization: Bearer <JWT_TOKEN>`（必需；仅admin/superAdmin可访问）
+- 查询参数：
+  - `page`（默认 `1`）、`pageSize`（默认 `10`）
+- 行为：获取所有状态为PENDING的个人时长申请
+- 响应：
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "items": [ /* PersonalHourRequest[] */ ],
+    "total": 15,
+    "page": 1,
+    "pageSize": 10
+  }
+}
+```
+- 失败响应：
+  - 未认证：`{"code":401, "message":"UNAUTHORIZED"}`
+  - 无权限：`{"code":403, "message":"FORBIDDEN"}`
+- 示例：
+```bash
+curl -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  "http://localhost:8080/api/activities/pending_requests?page=1&pageSize=10"
+```
+
+### 审核申请
+- `POST /api/activities/review_request/{id}`
+- 请求头：`Authorization: Bearer <JWT_TOKEN>`（必需；仅admin/superAdmin可访问）
+- 查询参数：
+  - `approved`（必需）：是否通过（true/false）
+  - `reason`（拒绝时必需）：拒绝理由
+- 行为：
+  - 通过（approved=true）：更新状态为APPROVED，将申请的时长添加到申请人的总时长
+  - 拒绝（approved=false）：更新状态为REJECTED，记录拒绝理由
+- 响应：
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "success": true,
+    "data": { /* 更新后的 PersonalHourRequest */ }
+  }
+}
+```
+- 失败响应：
+  - 未找到：`{"code":404, "message":"NOT_FOUND"}`
+  - 已审核：`{"code":400, "message":"ALREADY_REVIEWED"}`
+  - 拒绝时未填写理由：`{"code":400, "message":"REASON_REQUIRED"}`
+- 示例：
+```bash
+# 通过申请
+curl -X POST -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  "http://localhost:8080/api/activities/review_request/{id}?approved=true"
+
+# 拒绝申请
+curl -X POST -H "Authorization: Bearer <ADMIN_TOKEN>" \
+  "http://localhost:8080/api/activities/review_request/{id}?approved=false&reason=证明材料不足"
+```
+
+### 获取我的申请记录
+- `GET /api/activities/my_requests`
+- 请求头：`Authorization: Bearer <JWT_TOKEN>`（必需）
+- 查询参数：
+  - `page`（默认 `1`）、`pageSize`（默认 `10`）
+  - `status`（可选）：筛选状态（PENDING/APPROVED/REJECTED）
+- 行为：获取当前登录用户的所有申请记录
+- 响应：
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "items": [ /* PersonalHourRequest[] */ ],
+    "total": 5,
+    "page": 1,
+    "pageSize": 10
+  }
+}
+```
+- 示例：
+```bash
+# 获取所有申请
+curl -H "Authorization: Bearer <JWT_TOKEN>" \
+  "http://localhost:8080/api/activities/my_requests"
+
+# 只获取审核中的申请
+curl -H "Authorization: Bearer <JWT_TOKEN>" \
+  "http://localhost:8080/api/activities/my_requests?status=PENDING"
+```
+
+### 获取申请详情
+- `GET /api/activities/request/{id}`
+- 请求头：`Authorization: Bearer <JWT_TOKEN>`（必需）
+- 权限：申请人本人或管理员
+- 响应：
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": { /* PersonalHourRequest */ }
+}
+```
+- 失败响应：
+  - 未找到：`{"code":404, "message":"NOT_FOUND"}`
+  - 无权限：`{"code":403, "message":"FORBIDDEN"}`
+
+### 撤销申请
+- `DELETE /api/activities/request/{id}`
+- 请求头：`Authorization: Bearer <JWT_TOKEN>`（必需）
+- 权限：仅申请人本人，且申请状态为PENDING
+- 行为：删除待审核的申请及其附件
+- 响应：
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {
+    "success": true,
+    "message": "申请已撤销"
+  }
+}
+```
+- 失败响应：
+  - 未找到：`{"code":404, "message":"NOT_FOUND"}`
+  - 无权限：`{"code":403, "message":"FORBIDDEN"}`
+  - 已审核无法撤销：`{"code":400, "message":"CANNOT_DELETE_REVIEWED"}`
+- 示例：
+```bash
+curl -X DELETE -H "Authorization: Bearer <JWT_TOKEN>" \
+  "http://localhost:8080/api/activities/request/{id}"
+```
+
 ## 用户管理（Users）补充
 
 ### 列出所有用户

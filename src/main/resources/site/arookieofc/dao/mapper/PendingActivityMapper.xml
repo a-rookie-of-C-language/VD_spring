@@ -13,24 +13,31 @@
         <result column="cover_path" property="coverPath"/>
         <result column="created_at" property="createdAt"/>
         <result column="submitted_by" property="submittedBy"/>
+        <result column="status" property="status"/>
+        <result column="reviewed_at" property="reviewedAt"/>
+        <result column="reviewed_by" property="reviewedBy"/>
+        <result column="rejected_reason" property="rejectedReason"/>
         <collection property="attachment" ofType="java.lang.String" column="id" select="selectAttachmentsByPendingActivityId"/>
         <collection property="participants" ofType="java.lang.String" column="id" select="selectParticipantsByPendingActivityId"/>
     </resultMap>
 
     <select id="getById" resultMap="PendingActivityResultMap">
-        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by
+        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by,
+               status, reviewed_at, reviewed_by, rejected_reason
         FROM pending_activities
         WHERE id = #{id}
     </select>
 
     <select id="listAll" resultMap="PendingActivityResultMap">
-        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by
+        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by,
+               status, reviewed_at, reviewed_by, rejected_reason
         FROM pending_activities
         ORDER BY created_at DESC
     </select>
 
     <select id="listBySubmitter" resultMap="PendingActivityResultMap">
-        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by
+        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by,
+               status, reviewed_at, reviewed_by, rejected_reason
         FROM pending_activities
         WHERE submitted_by = #{submittedBy}
         ORDER BY created_at DESC
@@ -48,7 +55,8 @@
     </select>
 
     <select id="listPaged" resultMap="PendingActivityResultMap">
-        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by
+        SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by,
+               status, reviewed_at, reviewed_by, rejected_reason
         FROM pending_activities
         <where>
             <if test="type != null">AND type = #{type}</if>
@@ -62,9 +70,11 @@
 
     <insert id="insert" parameterType="site.arookieofc.dao.entity.PendingActivity">
         INSERT INTO pending_activities(
-            id, functionary, name, type, description, duration, end_time, cover_path, submitted_by
+            id, functionary, name, type, description, duration, end_time, cover_path, submitted_by,
+            status, reviewed_at, reviewed_by, rejected_reason
         ) VALUES (
-            #{id}, #{functionary}, #{name}, #{type}, #{description}, #{duration}, #{endTime}, #{coverPath}, #{submittedBy}
+            #{id}, #{functionary}, #{name}, #{type}, #{description}, #{duration}, #{endTime}, #{coverPath}, #{submittedBy},
+            #{status}, #{reviewedAt}, #{reviewedBy}, #{rejectedReason}
         )
     </insert>
 

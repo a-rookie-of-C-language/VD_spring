@@ -20,6 +20,8 @@
         <result column="duration" property="duration"/>
         <result column="rejected_reason" property="rejectedReason"/>
         <result column="imported" property="imported"/>
+        <result column="reviewed_at" property="reviewedAt"/>
+        <result column="reviewed_by" property="reviewedBy"/>
         <collection property="attachment" ofType="java.lang.String" column="id" select="selectAttachmentsByActivityId"/>
         <collection property="participants" ofType="java.lang.String" column="id" select="selectParticipantsByActivityId"/>
     </resultMap>
@@ -28,7 +30,7 @@
         SELECT id, functionary, name, type, description,
                enrollment_start_time, enrollment_end_time,
                start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
-               rejected_reason, imported
+               rejected_reason, imported, reviewed_at, reviewed_by
         FROM activities
         WHERE id = #{id}
     </select>
@@ -37,7 +39,7 @@
         SELECT id, functionary, name, type, description,
                enrollment_start_time, enrollment_end_time,
                start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
-               rejected_reason, imported
+               rejected_reason, imported, reviewed_at, reviewed_by
         FROM activities
         ORDER BY start_time DESC
   </select>
@@ -61,7 +63,7 @@
     SELECT id, functionary, name, type, description,
            enrollment_start_time, enrollment_end_time,
            start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
-           rejected_reason, imported
+           rejected_reason, imported, reviewed_at, reviewed_by
     FROM activities
     <where>
       <if test="type != null">AND type = #{type}</if>
@@ -81,11 +83,13 @@
         INSERT INTO activities(
             id, functionary, name, type, description,
             enrollment_start_time, enrollment_end_time,
-            start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration
+            start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration, imported,
+            reviewed_at, reviewed_by
         ) VALUES (
             #{id}, #{functionary}, #{name}, #{type}, #{description},
             #{enrollmentStartTime}, #{enrollmentEndTime},
-            #{startTime}, #{expectedEndTime}, #{endTime}, #{coverPath}, #{maxParticipant}, #{status}, #{isFull}, #{duration}
+            #{startTime}, #{expectedEndTime}, #{endTime}, #{coverPath}, #{maxParticipant}, #{status}, #{isFull}, #{duration}, #{imported},
+            #{reviewedAt}, #{reviewedBy}
         )
     </insert>
 
@@ -104,7 +108,9 @@
             max_participants = #{maxParticipant},
             status = #{status},
             is_full = #{isFull},
-            duration = #{duration}
+            duration = #{duration},
+            reviewed_at = #{reviewedAt},
+            reviewed_by = #{reviewedBy}
         WHERE id = #{id}
     </update>
 
@@ -176,7 +182,7 @@
         SELECT a.id, a.functionary, a.name, a.type, a.description,
                a.enrollment_start_time, a.enrollment_end_time,
                a.start_time, a.expected_end_time, a.end_time, a.cover_path, a.max_participants, a.status, a.is_full, a.duration,
-               a.rejected_reason, a.imported
+               a.rejected_reason, a.imported, a.reviewed_at, a.reviewed_by
         FROM activities a
         INNER JOIN activity_participants ap ON a.id = ap.activity_id
         WHERE ap.student_no = #{studentNo}

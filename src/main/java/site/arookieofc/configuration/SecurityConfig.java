@@ -31,10 +31,11 @@ public class SecurityConfig {
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/user/login", "/user/register").permitAll()
+                        .requestMatchers("/api/user/login").permitAll()
                         .requestMatchers("/api/activities/*/review").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/api/activities/MyActivities", "/api/activities/MyStatus").authenticated()
                         .requestMatchers("/api/monitoring/**").hasRole("SUPERADMIN")
+                        .requestMatchers("/api/suggestions/*/reply").hasRole("SUPERADMIN")
                         .anyRequest().permitAll()
                 )
                 .exceptionHandling(e ->

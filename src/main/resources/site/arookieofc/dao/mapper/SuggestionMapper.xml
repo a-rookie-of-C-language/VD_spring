@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.SuggestionMapper">
+
+    <resultMap id="SuggestionResultMap" type="site.arookieofc.dao.entity.Suggestion">
+        <id column="id" property="id"/>
+        <result column="title" property="title"/>
+        <result column="content" property="content"/>
+        <result column="student_no" property="studentNo"/>
+        <result column="status" property="status"/>
+        <result column="reply_content" property="replyContent"/>
+        <result column="reply_time" property="replyTime"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <insert id="insert">
+        INSERT INTO suggestions (id, title, content, student_no, status, created_at)
+        VALUES (#{id}, #{title}, #{content}, #{studentNo}, #{status}, #{createdAt})
+    </insert>
+
+    <select id="getById" resultMap="SuggestionResultMap">
+        SELECT id, title, content, student_no, status, reply_content, reply_time, created_at
+        FROM suggestions
+        WHERE id = #{id}
+    </select>
+
+    <select id="listByStudentNo" resultMap="SuggestionResultMap">
+        SELECT id, title, content, student_no, status, reply_content, reply_time, created_at
+        FROM suggestions
+        WHERE student_no = #{studentNo}
+        ORDER BY created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="countByStudentNo" resultType="int">
+        SELECT COUNT(1)
+        FROM suggestions
+        WHERE student_no = #{studentNo}
+    </select>
+
+    <select id="listAll" resultMap="SuggestionResultMap">
+        SELECT id, title, content, student_no, status, reply_content, reply_time, created_at
+        FROM suggestions
+        <where>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="countAll" resultType="int">
+        SELECT COUNT(1)
+        FROM suggestions
+        <where>
+            <if test="status != null">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <update id="updateReply">
+        UPDATE suggestions
+        SET reply_content = #{replyContent},
+            reply_time = #{replyTime},
+            status = #{status}
+        WHERE id = #{id}
+    </update>
+
+</mapper>
+

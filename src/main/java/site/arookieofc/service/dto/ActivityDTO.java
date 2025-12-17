@@ -44,12 +44,16 @@ public class ActivityDTO {
     private Integer maxParticipants;
     @JsonProperty("Attachment")
     private List<String> attachment;
+    @JsonIgnore
+    private List<MultipartFile> attachmentFiles;  // 附件文件上传
     private List<String> participants;
     private ActivityStatus status;
     private Boolean isFull;
     private Double duration;
     private String rejectedReason;
     private Boolean imported;
+    private OffsetDateTime reviewedAt;    // 审核时间
+    private String reviewedBy;            // 审核人学号
 
     public Activity toEntity(java.time.ZoneId zone) {
         return site.arookieofc.dao.entity.Activity.builder()
@@ -70,6 +74,8 @@ public class ActivityDTO {
                 .duration(this.duration)
                 .rejectedReason(this.rejectedReason)
                 .imported(this.imported != null ? this.imported : false)
+                .reviewedAt(this.reviewedAt == null ? null : this.reviewedAt.atZoneSameInstant(zone).toLocalDateTime())
+                .reviewedBy(this.reviewedBy)
                 .build();
     }
 
@@ -92,14 +98,9 @@ public class ActivityDTO {
                 .duration(this.duration)
                 .rejectedReason(this.rejectedReason)
                 .imported(this.imported != null ? this.imported : false)
+                .reviewedAt(this.reviewedAt == null ? null : this.reviewedAt.atZoneSameInstant(zone).toLocalDateTime())
+                .reviewedBy(this.reviewedBy)
                 .build();
     }
-
-    /**
-     * Convert Activity entity to DTO
-     * @param activity Activity entity
-     * @param zone ZoneId for time conversion
-     * @return ActivityDTO
-     */
     
 }

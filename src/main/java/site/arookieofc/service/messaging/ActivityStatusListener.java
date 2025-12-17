@@ -1,22 +1,32 @@
 package site.arookieofc.service.messaging;
-
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import site.arookieofc.configuration.RabbitConfig;
 import site.arookieofc.dao.entity.Activity;
 import site.arookieofc.dao.mapper.ActivityMapper;
 import site.arookieofc.service.BO.ActivityStatus;
+import site.arookieofc.service.VolunteerHourGrantService;
 
 @Component
-@RequiredArgsConstructor
 @Slf4j
 public class ActivityStatusListener {
     private final ActivityMapper activityMapper;
+    private final VolunteerHourGrantService volunteerHourGrantService;
     private final ObjectMapper objectMapper = new ObjectMapper();
+    @Lazy
+    @Autowired
+    private ActivityStatusListener self;
+
+    public ActivityStatusListener(ActivityMapper activityMapper,
+                                  VolunteerHourGrantService volunteerHourGrantService) {
+        this.activityMapper = activityMapper;
+        this.volunteerHourGrantService = volunteerHourGrantService;
+    }
 
     @RabbitListener(queues = RabbitConfig.UPDATE_QUEUE)
     public void onMessage(byte[] payload) {
@@ -24,14 +34,14 @@ public class ActivityStatusListener {
             ActivityStatusUpdateMessage msg = objectMapper
                     .readValue(payload, ActivityStatusUpdateMessage.class);
             log.info("Received status update message: {}", msg);
-            handle(msg);
+            self.handle(msg);
         } catch (Exception e) {
             log.error("Failed to process message payload: {}", new String(payload), e);
             try {
                 String s = new String(payload, java.nio.charset.StandardCharsets.UTF_8);
                 String[] parts = s.split("\\|");
                 if (parts.length == 2) {
-                    handle(new ActivityStatusUpdateMessage(parts[0]
+                    self.handle(new ActivityStatusUpdateMessage(parts[0]
                             , ActivityStatus.valueOf(parts[1])));
                 }
             } catch (Exception ex) {
@@ -41,7 +51,7 @@ public class ActivityStatusListener {
     }
 
     @Transactional
-    private void handle(ActivityStatusUpdateMessage msg) {
+    public void handle(ActivityStatusUpdateMessage msg) {
         if (msg == null) return;
         
         Activity a = activityMapper.getById(msg.getActivityId());
@@ -52,8 +62,7 @@ public class ActivityStatusListener {
         
         ActivityStatus currentStatus = a.getStatus();
         ActivityStatus targetStatus = msg.getTargetStatus();
-        
-        // Idempotency check: if status is already the target, this is a duplicate/idempotent message
+
         if (currentStatus == targetStatus) {
             log.info("Activity {} already has status {}, message is idempotent - skipping update", 
                     a.getId(), targetStatus);
@@ -85,5 +94,16 @@ public class ActivityStatusListener {
         log.info("Updating activity {} status from {} to {}", a.getId(), currentStatus, targetStatus);
         int rows = activityMapper.updateStatus(a.getId(), targetStatus);
         log.info("Status update affected rows: {}", rows);
+
+        // Auto grant volunteer hours when activity ends
+        if (targetStatus == ActivityStatus.ActivityEnded && rows > 0) {
+            try {
+                int granted = volunteerHourGrantService.grantHoursForCompletedActivity(a.getId());
+                log.info("Auto-granted volunteer hours for completed activity {}: {} participants",
+                        a.getId(), granted);
+            } catch (Exception e) {
+                log.error("Failed to auto-grant volunteer hours for activity {}", a.getId(), e);
+            }
+        }
     }
 }

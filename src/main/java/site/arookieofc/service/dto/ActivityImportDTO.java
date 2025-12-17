@@ -12,9 +12,6 @@ import site.arookieofc.service.BO.ActivityType;
 import java.time.OffsetDateTime;
 import java.util.List;
 
-/**
- * DTO for importing activities (already completed activities)
- */
 @Data
 @Builder
 @NoArgsConstructor
@@ -36,5 +33,7 @@ public class ActivityImportDTO {
     @JsonProperty("CoverImage")
     private String coverImage;
     private List<String> attachment;
+    @JsonIgnore
+    private List<MultipartFile> attachmentFiles;  // 附件文件上传
 }
 

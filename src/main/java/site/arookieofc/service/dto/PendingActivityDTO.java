@@ -6,6 +6,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import site.arookieofc.dao.entity.PendingActivity;
+import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.service.BO.ActivityType;
 
 import java.time.OffsetDateTime;
@@ -36,6 +37,10 @@ public class PendingActivityDTO {
     @JsonProperty("Attachment")
     private List<String> attachment;
     private List<String> participants;
+    private ActivityStatus status;  // 审核状态
+    private OffsetDateTime reviewedAt;       // 审核时间
+    private String reviewedBy;               // 审核人学号
+    private String rejectedReason;           // 拒绝理由
 
     public static PendingActivityDTO fromEntity(PendingActivity entity, ZoneId zone) {
         if (entity == null) return null;
@@ -52,6 +57,10 @@ public class PendingActivityDTO {
                 .submittedBy(entity.getSubmittedBy())
                 .attachment(entity.getAttachment())
                 .participants(entity.getParticipants())
+                .status(entity.getStatus())
+                .reviewedAt(entity.getReviewedAt() == null ? null : entity.getReviewedAt().atZone(zone).toOffsetDateTime())
+                .reviewedBy(entity.getReviewedBy())
+                .rejectedReason(entity.getRejectedReason())
                 .build();
     }
 }

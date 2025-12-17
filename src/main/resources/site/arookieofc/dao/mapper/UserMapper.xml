@@ -35,4 +35,10 @@
         ORDER BY student_no
     </select>
 
+    <update id="updateTotalHours">
+        UPDATE users
+        SET total_hours = #{totalHours}
+        WHERE student_no = #{studentNo}
+    </update>
+
 </mapper>

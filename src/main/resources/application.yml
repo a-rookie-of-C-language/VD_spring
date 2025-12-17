@@ -12,6 +12,14 @@ spring:
       enabled: true
       max-file-size: 20MB
       max-request-size: 20MB
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
   # Mail configuration for alerts
   mail:
     host: smtp.163.com
@@ -50,7 +58,4 @@ app:
       secret: hzz.arookieofc-language.Elysia.Cyrene
       expiry-minutes: 2400
   messaging:
-    # Enable immediate message triggering on startup for development/testing
-    # Set to true to trigger all status update messages immediately on startup with minimal delay
-    # Set to false for production to schedule messages for their actual time
     dev-mode-trigger: true

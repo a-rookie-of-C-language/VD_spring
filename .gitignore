@@ -4,3 +4,26 @@ log.txt
 target
 /uploads
 need.md
+
+# Maven
+*.log
+*.jar
+*.war
+
+# IDE
+*.iml
+.vscode
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (don't commit real credentials)
+application-local.yml
+
+# Docker
+.env
+
+# Test temp files
+temp_*.txt
+

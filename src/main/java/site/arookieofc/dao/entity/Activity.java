@@ -36,6 +36,8 @@ public class Activity {
     private Double duration;
     private String rejectedReason;
     private Boolean imported;
+    private LocalDateTime reviewedAt;     // 审核时间
+    private String reviewedBy;            // 审核人学号
 
     public ActivityDTO toDTO(java.time.ZoneId zone) {
         java.time.OffsetDateTime est = enrollmentStartTime == null ? null : enrollmentStartTime.atZone(zone).toOffsetDateTime();
@@ -43,6 +45,7 @@ public class Activity {
         java.time.OffsetDateTime st = startTime == null ? null : startTime.atZone(zone).toOffsetDateTime();
         java.time.OffsetDateTime eet2 = expectedEndTime == null ? null : expectedEndTime.atZone(zone).toOffsetDateTime();
         java.time.OffsetDateTime et = endTime == null ? null : endTime.atZone(zone).toOffsetDateTime();
+        java.time.OffsetDateTime rat = reviewedAt == null ? null : reviewedAt.atZone(zone).toOffsetDateTime();
         return ActivityDTO.builder()
                 .id(id)
                 .functionary(functionary)
@@ -63,6 +66,8 @@ public class Activity {
                 .duration(duration)
                 .rejectedReason(rejectedReason)
                 .imported(imported)
+                .reviewedAt(rat)
+                .reviewedBy(reviewedBy)
                 .build();
     }
 }

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.PersonalHourRequestMapper">
+
+    <resultMap id="PersonalHourRequestResultMap" type="site.arookieofc.dao.entity.PersonalHourRequest">
+        <id column="id" property="id"/>
+        <result column="applicant_student_no" property="applicantStudentNo"/>
+        <result column="name" property="name"/>
+        <result column="functionary" property="functionary"/>
+        <result column="type" property="type"/>
+        <result column="description" property="description"/>
+        <result column="start_time" property="startTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="duration" property="duration"/>
+        <result column="status" property="status"/>
+        <result column="rejected_reason" property="rejectedReason"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="reviewed_at" property="reviewedAt"/>
+        <result column="reviewed_by" property="reviewedBy"/>
+        <collection property="attachments" ofType="java.lang.String" column="id" select="selectAttachmentsByRequestId"/>
+    </resultMap>
+
+    <select id="getById" resultMap="PersonalHourRequestResultMap">
+        SELECT id, applicant_student_no, name, functionary, type, description,
+               start_time, end_time, duration, status, rejected_reason,
+               created_at, reviewed_at, reviewed_by
+        FROM personal_hour_requests
+        WHERE id = #{id}
+    </select>
+
+    <select id="listAll" resultMap="PersonalHourRequestResultMap">
+        SELECT id, applicant_student_no, name, functionary, type, description,
+               start_time, end_time, duration, status, rejected_reason,
+               created_at, reviewed_at, reviewed_by
+        FROM personal_hour_requests
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="listByApplicant" resultMap="PersonalHourRequestResultMap">
+        SELECT id, applicant_student_no, name, functionary, type, description,
+               start_time, end_time, duration, status, rejected_reason,
+               created_at, reviewed_at, reviewed_by
+        FROM personal_hour_requests
+        WHERE applicant_student_no = #{applicantStudentNo}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="countFiltered" resultType="int">
+        SELECT COUNT(1)
+        FROM personal_hour_requests
+        <where>
+            <if test="applicantStudentNo != null and applicantStudentNo != ''">
+                AND applicant_student_no = #{applicantStudentNo}
+            </if>
+            <if test="type != null">AND type = #{type}</if>
+            <if test="status != null">AND status = #{status}</if>
+            <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
+        </where>
+    </select>
+
+    <select id="listPaged" resultMap="PersonalHourRequestResultMap">
+        SELECT id, applicant_student_no, name, functionary, type, description,
+               start_time, end_time, duration, status, rejected_reason,
+               created_at, reviewed_at, reviewed_by
+        FROM personal_hour_requests
+        <where>
+            <if test="applicantStudentNo != null and applicantStudentNo != ''">
+                AND applicant_student_no = #{applicantStudentNo}
+            </if>
+            <if test="type != null">AND type = #{type}</if>
+            <if test="status != null">AND status = #{status}</if>
+            <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <insert id="insert" parameterType="site.arookieofc.dao.entity.PersonalHourRequest">
+        INSERT INTO personal_hour_requests(
+            id, applicant_student_no, name, functionary, type, description,
+            start_time, end_time, duration, status, rejected_reason,
+            created_at, reviewed_at, reviewed_by
+        ) VALUES (
+            #{id}, #{applicantStudentNo}, #{name}, #{functionary}, #{type}, #{description},
+            #{startTime}, #{endTime}, #{duration}, #{status}, #{rejectedReason},
+            #{createdAt}, #{reviewedAt}, #{reviewedBy}
+        )
+    </insert>
+
+    <update id="update" parameterType="site.arookieofc.dao.entity.PersonalHourRequest">
+        UPDATE personal_hour_requests
+        SET name = #{name},
+            functionary = #{functionary},
+            type = #{type},
+            description = #{description},
+            start_time = #{startTime},
+            end_time = #{endTime},
+            duration = #{duration},
+            status = #{status},
+            rejected_reason = #{rejectedReason},
+            reviewed_at = #{reviewedAt},
+            reviewed_by = #{reviewedBy}
+        WHERE id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        UPDATE personal_hour_requests
+        SET status = #{status},
+            rejected_reason = #{rejectedReason},
+            reviewed_at = #{reviewedAt},
+            reviewed_by = #{reviewedBy}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM personal_hour_requests WHERE id = #{id}
+    </delete>
+
+    <select id="selectAttachmentsByRequestId" resultType="java.lang.String">
+        SELECT path FROM personal_hour_request_attachments WHERE request_id = #{requestId}
+    </select>
+
+    <delete id="deleteAttachmentsByRequestId">
+        DELETE FROM personal_hour_request_attachments WHERE request_id = #{requestId}
+    </delete>
+
+    <insert id="insertAttachments">
+        INSERT INTO personal_hour_request_attachments(request_id, path)
+        VALUES
+        <foreach collection="paths" item="p" separator=",">
+            (#{requestId}, #{p})
+        </foreach>
+    </insert>
+
+    <select id="countByStatus" resultType="int">
+        SELECT COUNT(1) FROM personal_hour_requests WHERE status = #{status}
+    </select>
+
+</mapper>
+

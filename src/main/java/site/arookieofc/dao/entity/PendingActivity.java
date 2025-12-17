@@ -6,6 +6,7 @@ import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
 import lombok.AccessLevel;
 import site.arookieofc.service.BO.ActivityType;
+import site.arookieofc.service.BO.ActivityStatus;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -27,5 +28,9 @@ public class PendingActivity {
     private String submittedBy;
     private List<String> attachment;
     private List<String> participants;
+    private ActivityStatus status;         // 审核状态
+    private LocalDateTime reviewedAt;      // 审核时间
+    private String reviewedBy;             // 审核人学号
+    private String rejectedReason;         // 拒绝理由
 }
 

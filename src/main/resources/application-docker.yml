@@ -1,0 +1,72 @@
+server:
+  port: 8080
+
+spring:
+  profiles:
+    active: docker
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/VD?allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:su201314}
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 20MB
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:rabbitmq}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:vd_user}
+    password: ${SPRING_RABBITMQ_PASSWORD:su201314}
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  # Mail configuration for alerts
+  mail:
+    host: ${MAIL_HOST:smtp.163.com}
+    port: ${MAIL_PORT:25}
+    username: ${MAIL_USERNAME:ergr16976258@163.com}
+    password: ${MAIL_PASSWORD:AAXVZdBKbVgDnSbG}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+    default-encoding: UTF-8
+
+# Actuator configuration for metrics
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,env
+  endpoint:
+    health:
+      show-details: always
+  simple:
+    metrics:
+      export:
+        enabled: true
+
+app:
+  upload:
+    base-path: ${APP_UPLOAD_BASE_PATH:/app/uploads}
+    cover-path: covers
+  security:
+    jwt:
+      secret: ${JWT_SECRET:hzz.arookieofc-language.Elysia.Cyrene}
+      expiry-minutes: ${JWT_EXPIRY_MINUTES:2400}
+  messaging:
+    # 在Docker环境中关闭开发模式
+    dev-mode-trigger: false
+
+# 日志配置
+logging:
+  level:
+    site.arookieofc: DEBUG
+    org.springframework.amqp: INFO
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}"
