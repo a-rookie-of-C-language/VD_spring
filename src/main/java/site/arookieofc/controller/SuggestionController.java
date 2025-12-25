@@ -22,7 +22,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @RestController
 @Slf4j
-@RequestMapping("/api/suggestions")
+@RequestMapping("/suggestions")
 public class SuggestionController {
 
     private final SuggestionService suggestionService;

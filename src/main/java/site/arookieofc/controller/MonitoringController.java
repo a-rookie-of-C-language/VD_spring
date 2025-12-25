@@ -13,7 +13,7 @@ import site.arookieofc.service.MonitoringService;
  * 仅SuperAdmin可访问
  */
 @RestController
-@RequestMapping("/api/monitoring")
+@RequestMapping("/monitoring")
 @RequiredArgsConstructor
 @Slf4j
 public class MonitoringController {

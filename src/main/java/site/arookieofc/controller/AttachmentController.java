@@ -23,7 +23,7 @@ import java.nio.file.Paths;
 @RequiredArgsConstructor
 @RestController
 @Slf4j
-@RequestMapping("/api/files")
+@RequestMapping("/files")
 public class AttachmentController {
 
     @Value("${app.upload.base-path:uploads}")

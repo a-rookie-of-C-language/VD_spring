@@ -20,7 +20,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @RestController
 @Slf4j
-@RequestMapping("/api/activities")
+@RequestMapping("/activities")
 public class PersonalHourRequestController {
     private final PersonalHourRequestService requestService;
 

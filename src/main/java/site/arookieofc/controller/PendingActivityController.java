@@ -18,7 +18,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 @RestController
 @Slf4j
-@RequestMapping("/api/pending-activities")
+@RequestMapping("/pending-activities")
 public class PendingActivityController {
     private final PendingActivityService pendingActivityService;
 

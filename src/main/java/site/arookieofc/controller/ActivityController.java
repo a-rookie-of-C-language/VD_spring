@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @RestController
 @Slf4j
-@RequestMapping("/api/activities")
+@RequestMapping("/activities")
 public class ActivityController {
     private final ActivityService activityService;
     private final UserService userService;
