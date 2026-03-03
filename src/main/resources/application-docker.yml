@@ -8,7 +8,7 @@ spring:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/VD?allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
     driver-class-name: com.mysql.cj.jdbc.Driver
     username: ${SPRING_DATASOURCE_USERNAME:root}
-    password: ${SPRING_DATASOURCE_PASSWORD:su201314}
+    password: ${SPRING_DATASOURCE_PASSWORD}
   servlet:
     multipart:
       enabled: true
@@ -18,7 +18,7 @@ spring:
     host: ${SPRING_RABBITMQ_HOST:rabbitmq}
     port: ${SPRING_RABBITMQ_PORT:5672}
     username: ${SPRING_RABBITMQ_USERNAME:vd_user}
-    password: ${SPRING_RABBITMQ_PASSWORD:su201314}
+    password: ${SPRING_RABBITMQ_PASSWORD}
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -26,8 +26,8 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.163.com}
     port: ${MAIL_PORT:25}
-    username: ${MAIL_USERNAME:ergr16976258@163.com}
-    password: ${MAIL_PASSWORD:AAXVZdBKbVgDnSbG}
+    username: ${MAIL_USERNAME}
+    password: ${MAIL_PASSWORD}
     properties:
       mail:
         smtp:
@@ -57,7 +57,7 @@ app:
     cover-path: covers
   security:
     jwt:
-      secret: ${JWT_SECRET:hzz.arookieofc-language.Elysia.Cyrene}
+      secret: ${JWT_SECRET}
       expiry-minutes: ${JWT_EXPIRY_MINUTES:2400}
   messaging:
     # 在Docker环境中关闭开发模式

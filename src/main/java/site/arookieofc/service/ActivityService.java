@@ -8,6 +8,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import jakarta.validation.Valid;
 import org.springframework.web.multipart.MultipartFile;
+import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.dao.entity.Activity;
 import site.arookieofc.dao.mapper.ActivityMapper;
@@ -32,27 +33,29 @@ public class ActivityService {
     private final RabbitTemplate rabbitTemplate;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
+    private ActivityDTO enrichWithCoverImage(ActivityDTO dto) {
+        if (dto.getCoverPath() != null && !dto.getCoverPath().isEmpty()) {
+            dto.setCoverImage(fileUploadService.getCoverImageUrl(dto.getCoverPath()));
+        }
+        return dto;
+    }
+
     public List<ActivityDTO> listActivities() {
-        return activityMapper.listAll().stream().map(
-                        a -> a
-                                .toDTO(ZONE))
-                .peek(d -> {
-                    if (d.getCoverPath() != null && !d.getCoverPath().isEmpty()) {
-                        d.setCoverImage(fileUploadService
-                                .readCoverImageAsDataUrl(d.getCoverPath()));
-                    }
-                }).collect(Collectors.toList());
+        return activityMapper.listAll().stream()
+                .map(a -> a.toDTO(ZONE))
+                .map(this::enrichWithCoverImage)
+                .collect(Collectors.toList());
     }
 
     public int refreshStatusesAndUpdate() {
-        List<Activity> activities = activityMapper.listAll();
+        List<Activity> activities = activityMapper.listAllBase();
         int updated = 0;
         for (Activity a : activities) {
             if (a.getStatus() == ActivityStatus.ActivityEnded || a.getStatus() == ActivityStatus.FailReview || a.getStatus() == ActivityStatus.UnderReview) {
                 continue;
             }
             ActivityStatus old = a.getStatus();
-            site.arookieofc.service.messaging.ActivityStartupSynchronizer.changeStatus(a, ZONE);
+            ActivityStartupSynchronizer.changeStatus(a, ZONE);
             if (old != a.getStatus()) {
                 activityMapper.updateStatus(a.getId(), a.getStatus());
                 updated++;
@@ -64,33 +67,39 @@ public class ActivityService {
     public List<ActivityDTO> getActivitiesByStudentNo(String studentNo) {
         return activityMapper.getActivitiesByStudentNo(studentNo).stream()
                 .map(a -> a.toDTO(ZONE))
-                .peek(d -> {
-                    if (d.getCoverPath() != null && !d.getCoverPath().isEmpty()) {
-                        d.setCoverImage(fileUploadService
-                                .readCoverImageAsDataUrl(d.getCoverPath()));
-                    }
-                }).collect(Collectors.toList());
+                .map(this::enrichWithCoverImage)
+                .collect(Collectors.toList());
     }
 
     public ActivityDTO getActivityById(String id) {
         Activity activity = activityMapper.getById(id);
         if (activity == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
-        ActivityDTO dto = activity.toDTO(ZONE);
-        if (dto.getCoverPath() != null && !dto.getCoverPath().isEmpty()) {
-            dto.setCoverImage(fileUploadService.readCoverImageAsDataUrl(dto.getCoverPath()));
-        }
-        return dto;
+        return enrichWithCoverImage(activity.toDTO(ZONE));
     }
 
     public int countActivities(ActivityType type, ActivityStatus status,
                                String functionary, String name,
                                OffsetDateTime startFrom, OffsetDateTime startTo,
                                Boolean isFull) {
+        return countActivities(type, status, functionary, name, startFrom, startTo, isFull, false);
+    }
+
+    public int countActivitiesAll(ActivityType type, ActivityStatus status,
+                                  String functionary, String name,
+                                  OffsetDateTime startFrom, OffsetDateTime startTo,
+                                  Boolean isFull) {
+        return countActivities(type, status, functionary, name, startFrom, startTo, isFull, true);
+    }
+
+    private int countActivities(ActivityType type, ActivityStatus status,
+                                String functionary, String name,
+                                OffsetDateTime startFrom, OffsetDateTime startTo,
+                                Boolean isFull, boolean includeHidden) {
         LocalDateTime sf = startFrom == null ? null : startFrom.atZoneSameInstant(ZONE).toLocalDateTime();
         LocalDateTime st = startTo == null ? null : startTo.atZoneSameInstant(ZONE).toLocalDateTime();
-        boolean excludeHidden = (status == null);
+        boolean excludeHidden = includeHidden ? false : (status == null);
         return activityMapper.countFiltered(type, status, functionary, name, sf, st, isFull, excludeHidden);
     }
 
@@ -98,72 +107,30 @@ public class ActivityService {
                                                  String functionary, String name,
                                                  OffsetDateTime startFrom, OffsetDateTime startTo,
                                                  Boolean isFull, int page, int pageSize) {
-        int offset = Math.max(0, (page - 1) * pageSize);
-        LocalDateTime sf = startFrom == null
-                ? null
-                : startFrom.atZoneSameInstant(ZONE).toLocalDateTime();
-        LocalDateTime st = startTo == null
-                ? null
-                : startTo.atZoneSameInstant(ZONE).toLocalDateTime();
-        boolean excludeHidden = (status == null);
-        return activityMapper.listPaged(
-                        type,
-                        status,
-                        functionary,
-                        name,
-                        sf,
-                        st,
-                        isFull,
-                        excludeHidden,
-                        pageSize,
-                        offset
-                )
-                .stream()
-                .map(a -> a.toDTO(ZONE))
-                .peek(d -> {
-                    if (d.getCoverPath() != null && !d.getCoverPath().isEmpty()) {
-                        d.setCoverImage(fileUploadService.readCoverImageAsDataUrl(d.getCoverPath()));
-                    }
-                }).collect(Collectors.toList());
+        return listActivitiesPaged(type, status, functionary, name, startFrom, startTo, isFull, false, page, pageSize);
     }
 
     public List<ActivityDTO> listActivitiesPagedAll(ActivityType type, ActivityStatus status,
                                                     String functionary, String name,
                                                     OffsetDateTime startFrom, OffsetDateTime startTo,
                                                     Boolean isFull, int page, int pageSize) {
+        return listActivitiesPaged(type, status, functionary, name, startFrom, startTo, isFull, true, page, pageSize);
+    }
+
+    private List<ActivityDTO> listActivitiesPaged(ActivityType type, ActivityStatus status,
+                                                  String functionary, String name,
+                                                  OffsetDateTime startFrom, OffsetDateTime startTo,
+                                                  Boolean isFull, boolean includeHidden,
+                                                  int page, int pageSize) {
         int offset = Math.max(0, (page - 1) * pageSize);
         LocalDateTime sf = startFrom == null ? null : startFrom.atZoneSameInstant(ZONE).toLocalDateTime();
         LocalDateTime st = startTo == null ? null : startTo.atZoneSameInstant(ZONE).toLocalDateTime();
-        boolean excludeHidden = false;
-        return activityMapper.listPaged(
-                        type,
-                        status,
-                        functionary,
-                        name,
-                        sf,
-                        st,
-                        isFull,
-                        excludeHidden,
-                        pageSize,
-                        offset
-                )
+        boolean excludeHidden = includeHidden ? false : (status == null);
+        return activityMapper.listPaged(type, status, functionary, name, sf, st, isFull, excludeHidden, pageSize, offset)
                 .stream()
                 .map(a -> a.toDTO(ZONE))
-                .peek(d -> {
-                    if (d.getCoverPath() != null && !d.getCoverPath().isEmpty()) {
-                        d.setCoverImage(fileUploadService.readCoverImageAsDataUrl(d.getCoverPath()));
-                    }
-                }).collect(Collectors.toList());
-    }
-
-    public int countActivitiesAll(ActivityType type, ActivityStatus status,
-                                  String functionary, String name,
-                                  OffsetDateTime startFrom, OffsetDateTime startTo,
-                                  Boolean isFull) {
-        LocalDateTime sf = startFrom == null ? null : startFrom.atZoneSameInstant(ZONE).toLocalDateTime();
-        LocalDateTime st = startTo == null ? null : startTo.atZoneSameInstant(ZONE).toLocalDateTime();
-        boolean excludeHidden = false;
-        return activityMapper.countFiltered(type, status, functionary, name, sf, st, isFull, excludeHidden);
+                .map(this::enrichWithCoverImage)
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -189,17 +156,14 @@ public class ActivityService {
             activityMapper.insertAttachments(id, dto.getAttachment());
         }
         
-        // Automatically add functionary as participant
         String functionary = dto.getFunctionary();
         if (functionary != null && !functionary.isEmpty()) {
             activityMapper.insertParticipant(id, functionary);
         }
         
-        // Add other participants (skip functionary if already in list)
         if (dto.getParticipants() != null && !dto.getParticipants().isEmpty()) {
             for (String participant : dto.getParticipants()) {
                 if (!participant.equals(functionary)) {
-                    // Check if participant already exists to avoid duplicates
                     int exists = activityMapper.existsParticipant(id, participant);
                     if (exists == 0) {
                         activityMapper.insertParticipant(id, participant);
@@ -220,21 +184,17 @@ public class ActivityService {
             activityMapper.update(created);
             created = activityMapper.getById(id);
         }
-        ActivityDTO out = created.toDTO(ZONE);
-        if (out.getCoverPath() != null && !out.getCoverPath().isEmpty()) {
-            out.setCoverImage(fileUploadService.readCoverImageAsDataUrl(out.getCoverPath()));
-        }
-        return out;
+        return enrichWithCoverImage(created.toDTO(ZONE));
     }
 
     @Transactional
     public ActivityDTO updateActivity(String id, @Valid ActivityDTO dto) {
         Activity current = activityMapper.getById(id);
         if (current == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
         if (current.getStatus() != ActivityStatus.UnderReview && current.getStatus() != ActivityStatus.FailReview) {
-            throw new IllegalArgumentException("REVIEW_PASSED");
+            throw BusinessException.badRequest("REVIEW_PASSED");
         }
         try {
             MultipartFile coverFile = dto.getCoverFile();
@@ -276,18 +236,18 @@ public class ActivityService {
     }
 
     @Transactional
-    public String enroll(String activityId, String studentNo) {
+    public void enroll(String activityId, String studentNo) {
         Activity act = activityMapper.getById(activityId);
         if (act == null) {
-            return "NOT_FOUND";
+            throw BusinessException.notFound("NOT_FOUND");
         }
         int cnt = activityMapper.countParticipantsByActivityId(activityId);
         if (act.getMaxParticipant() != null && cnt >= act.getMaxParticipant()) {
-            return "CAPACITY_FULL";
+            throw BusinessException.conflict("CAPACITY_FULL");
         }
         int exists = activityMapper.existsParticipant(activityId, studentNo);
         if (exists > 0) {
-            return "ALREADY_ENROLLED";
+            throw BusinessException.conflict("ALREADY_ENROLLED");
         }
         activityMapper.insertParticipant(activityId, studentNo);
         int after = cnt + 1;
@@ -297,30 +257,27 @@ public class ActivityService {
             updated.setIsFull(true);
             activityMapper.update(updated);
         }
-        return "OK";
     }
 
     @Transactional
-    public String unenroll(String activityId, String studentNo) {
+    public void unenroll(String activityId, String studentNo) {
         Activity act = activityMapper.getById(activityId);
         if (act == null) {
-            return "NOT_FOUND";
+            throw BusinessException.notFound("NOT_FOUND");
         }
-        // Prevent functionary from leaving their own activity
         if (studentNo.equals(act.getFunctionary())) {
-            return "FUNCTIONARY_CANNOT_UNENROLL";
+            throw BusinessException.forbidden("FUNCTIONARY_CANNOT_UNENROLL");
         }
         LocalDateTime now = LocalDateTime.now(ZONE);
         LocalDateTime enrollmentEnd = act.getEnrollmentEndTime();
         if (enrollmentEnd == null || !now.isBefore(enrollmentEnd)) {
-            return "ENROLLMENT_ENDED";
+            throw BusinessException.badRequest("ENROLLMENT_ENDED");
         }
         int exists = activityMapper.existsParticipant(activityId, studentNo);
         if (exists == 0) {
-            return "NOT_ENROLLED";
+            throw BusinessException.conflict("NOT_ENROLLED");
         }
         activityMapper.deleteParticipant(activityId, studentNo);
-        // Update isFull if needed
         int cnt = activityMapper.countParticipantsByActivityId(activityId);
         boolean full = act.getMaxParticipant() != null && cnt >= act.getMaxParticipant();
         if (Boolean.TRUE.equals(act.getIsFull()) && !full) {
@@ -328,14 +285,13 @@ public class ActivityService {
             updated.setIsFull(false);
             activityMapper.update(updated);
         }
-        return "OK";
     }
 
     @Transactional
     public ActivityDTO reviewActivity(String id, boolean approve, String reason) {
         Activity a = activityMapper.getById(id);
         if (a == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
         if (!approve) {
             a.setStatus(ActivityStatus.FailReview);
@@ -347,22 +303,18 @@ public class ActivityService {
         LocalDateTime est = a.getEnrollmentStartTime();
         LocalDateTime eet = a.getEnrollmentEndTime();
         if (est == null || eet == null) {
-            throw new IllegalArgumentException("INVALID_TIME");
+            throw BusinessException.badRequest("INVALID_TIME");
         }
         if (now.isAfter(eet)) {
-            throw new IllegalArgumentException("ENROLLMENT_PASSED");
+            throw BusinessException.badRequest("ENROLLMENT_PASSED");
         }
         
-        // Clear rejected reason on approval
         a.setRejectedReason(null);
-        // Use refreshStatus to set the correct status based on current time
         refreshStatus(a);
         activityMapper.update(a);
         scheduleStatusMessages(a);
         return getActivityDTO(id);
     }
-
-    // status refresh handled by RabbitMQ delayed messages
 
     private void scheduleStatusMessages(Activity entity) {
         ZonedDateTime now = ZonedDateTime.now(ZONE);

@@ -11,6 +11,7 @@ import site.arookieofc.service.BO.ActivityType;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Data
 @Builder
@@ -35,5 +36,6 @@ public class ActivityImportDTO {
     private List<String> attachment;
     @JsonIgnore
     private List<MultipartFile> attachmentFiles;  // 附件文件上传
+    // 新增：参与者个性化时长映射 (studentNo -> duration)
+    private Map<String, Double> participantDurations;
 }
-

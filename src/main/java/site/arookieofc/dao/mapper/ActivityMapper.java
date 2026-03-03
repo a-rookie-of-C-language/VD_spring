@@ -14,6 +14,12 @@ public interface ActivityMapper {
 
     List<Activity> listAll();
 
+    /**
+     * List all activities without loading collections (attachment/participants).
+     * Used by refreshStatusesAndUpdate() which only needs status/time fields.
+     */
+    List<Activity> listAllBase();
+
     int insert(Activity activity);
 
     int update(Activity activity);
@@ -71,4 +77,9 @@ public interface ActivityMapper {
      * Returns list of {type, count}
      */
     List<java.util.Map<String, Object>> countByType();
+
+    /**
+     * Get activity by exact name
+     */
+    Activity getByName(@Param("name") String name);
 }

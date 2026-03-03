@@ -21,14 +21,6 @@
         LIMIT 1
     </select>
 
-    <select id="login" resultMap="UserResultMap">
-        SELECT username, student_no, password, role, total_hours, created_at, clazz, grade, college
-        FROM users
-        WHERE student_no = #{studentNo}
-          AND password = #{password}
-        LIMIT 1
-    </select>
-
     <select id="listAll" resultMap="UserResultMap">
         SELECT username, student_no, password, role, total_hours, created_at, clazz, grade, college
         FROM users
@@ -38,6 +30,17 @@
     <update id="updateTotalHours">
         UPDATE users
         SET total_hours = #{totalHours}
+        WHERE student_no = #{studentNo}
+    </update>
+
+    <insert id="insertUser" parameterType="site.arookieofc.dao.entity.User">
+        INSERT INTO users (student_no, username, password, role, total_hours, created_at, clazz, grade, college)
+        VALUES (#{studentNo}, #{username}, #{password}, #{role}, #{totalHours}, #{createdAt}, #{clazz}, #{grade}, #{college})
+    </insert>
+
+    <update id="updatePassword">
+        UPDATE users
+        SET password = #{password}
         WHERE student_no = #{studentNo}
     </update>
 

@@ -6,6 +6,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
@@ -22,27 +24,30 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
-                .cors(cors -> {
-                })
+                .cors(cors -> {})
                 .sessionManagement(sm ->
                         sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .formLogin(AbstractHttpConfigurer::disable)
                 .httpBasic(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/user/login").permitAll()
-                        .requestMatchers("/api/activities/*/review").hasAnyRole("ADMIN", "SUPERADMIN")
-                        .requestMatchers("/api/activities/MyActivities", "/api/activities/MyStatus").authenticated()
-                        .requestMatchers("/api/monitoring/**").hasRole("SUPERADMIN")
-                        .requestMatchers("/api/suggestions/*/reply").hasRole("SUPERADMIN")
-                        .anyRequest().permitAll()
+                        .requestMatchers("/user/login", "/user/verifyToken").permitAll()
+                        .requestMatchers("/covers/**", "/attachments/**").permitAll()
+                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
+                        .requestMatchers("/activities/*/review").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers("/monitoring/**").hasRole("SUPERADMIN")
+                        .requestMatchers("/suggestions/*/reply").hasRole("SUPERADMIN")
+                        .anyRequest().authenticated()
                 )
                 .exceptionHandling(e ->
-                        e.authenticationEntryPoint((req,
-                                                    res,
-                                                    ex) ->
+                        e.authenticationEntryPoint((req, res, ex) ->
                                 res.sendError(HttpServletResponse.SC_UNAUTHORIZED)))
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
@@ -51,8 +56,8 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173"
-                , "https://arookieofc.site",
+        config.setAllowedOrigins(List.of("http://localhost:5173",
+                "https://arookieofc.site",
                 "http://arookieofc.site"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));

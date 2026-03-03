@@ -1,0 +1,1258 @@
+{
+	"info": {
+		"_postman_id": "b3e64627-4638-4e3a-9357-123456789abc",
+		"name": "VolunteerDuration API",
+		"description": "API documentation for Volunteer Duration system",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "Auth",
+			"item": [
+				{
+					"name": "Login",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"var jsonData = pm.response.json();",
+									"if (jsonData.code === 200) {",
+									"    pm.environment.set(\"token\", jsonData.data.token);",
+									"    pm.collectionVariables.set(\"token\", jsonData.data.token);",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user/login?studentNo=20210001&password=password",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"login"
+							],
+							"query": [
+								{
+									"key": "studentNo",
+									"value": "20210001",
+									"description": "Student Number"
+								},
+								{
+									"key": "password",
+									"value": "password",
+									"description": "Password"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Verify Token",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/user/verifyToken",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"verifyToken"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "User",
+			"item": [
+				{
+					"name": "Get Current User",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/user/getUser",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"getUser"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get User By No",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/user/getUserByStudentNo?studentNo=20210001",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"getUserByStudentNo"
+							],
+							"query": [
+								{
+									"key": "studentNo",
+									"value": "20210001"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List All Users",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/user/listAll",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"listAll"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Activity",
+			"item": [
+				{
+					"name": "Query Activities",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"page\": 1,\n    \"pageSize\": 10,\n    \"type\": null,\n    \"status\": null,\n    \"name\": null,\n    \"isFull\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/activities/query",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								"query"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Activity",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "name",
+									"value": "Community Clean Up",
+									"type": "text"
+								},
+								{
+									"key": "type",
+									"value": "COMMUNITY_SERVICE",
+									"type": "text"
+								},
+								{
+									"key": "description",
+									"value": "Cleaning up the community park.",
+									"type": "text"
+								},
+								{
+									"key": "maxParticipants",
+									"value": "50",
+									"type": "text"
+								},
+								{
+									"key": "EnrollmentStartTime",
+									"value": "2023-12-01T08:00:00+08:00",
+									"type": "text"
+								},
+								{
+									"key": "EnrollmentEndTime",
+									"value": "2023-12-05T18:00:00+08:00",
+									"type": "text"
+								},
+								{
+									"key": "startTime",
+									"value": "2023-12-10T09:00:00+08:00",
+									"type": "text"
+								},
+								{
+									"key": "expectedEndTime",
+									"value": "2023-12-10T12:00:00+08:00",
+									"type": "text"
+								},
+								{
+									"key": "duration",
+									"value": "3.0",
+									"type": "text"
+								},
+								{
+									"key": "coverFile",
+									"type": "file",
+									"description": "Upload cover image"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/activities",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Activity",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activities/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "activity_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Activity",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "name",
+									"value": "Updated Name",
+									"type": "text"
+								},
+								{
+									"key": "description",
+									"value": "Updated Description",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/activities/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "activity_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Activity",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activities/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "activity_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Enroll Activity",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activities/:id/enroll",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								":id",
+								"enroll"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "activity_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Unenroll Activity",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activities/:id/unenroll",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								":id",
+								"unenroll"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "activity_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Review Activity",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activities/:id/review?approve=true&reason=Good",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								":id",
+								"review"
+							],
+							"query": [
+								{
+									"key": "approve",
+									"value": "true"
+								},
+								{
+									"key": "reason",
+									"value": "Good"
+								}
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "activity_id_here"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "My Activities",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activities/MyActivities?page=1&pageSize=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								"MyActivities"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "pageSize",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "My Status",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activities/MyStatus",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								"MyStatus"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Attachment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file"
+								},
+								{
+									"key": "description",
+									"value": "Attachment Description",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/activities/upload/attachment",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								"upload",
+								"attachment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Attachment",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/activities/attachment?filePath=/attachments/file.pdf",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								"attachment"
+							],
+							"query": [
+								{
+									"key": "filePath",
+									"value": "/attachments/file.pdf"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Import Activity",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"description": "Excel file"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/activities/import",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								"import"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Pending Activity",
+			"item": [
+				{
+					"name": "Query Pending",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"page\": 1,\n    \"pageSize\": 10,\n    \"type\": null,\n    \"functionary\": null,\n    \"name\": null\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/pending-activities/query",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pending-activities",
+								"query"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Pending By ID",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/pending-activities/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pending-activities",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "pending_id"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Approve Pending",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/pending-activities/:id/approve",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pending-activities",
+								":id",
+								"approve"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "pending_id"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reject Pending",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/pending-activities/:id/reject?reason=Invalid Info",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pending-activities",
+								":id",
+								"reject"
+							],
+							"query": [
+								{
+									"key": "reason",
+									"value": "Invalid Info"
+								}
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "pending_id"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Pending",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/pending-activities/:id",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"pending-activities",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "pending_id"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Suggestion",
+			"item": [
+				{
+					"name": "Create Suggestion",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Improvement Idea\",\n    \"content\": \"We should have more events.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/suggestions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"suggestions"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "My Suggestions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/suggestions/my?page=1&pageSize=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"suggestions",
+								"my"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "pageSize",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List All Suggestions",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/suggestions?page=1&pageSize=10&status=PENDING",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"suggestions"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "pageSize",
+									"value": "10"
+								},
+								{
+									"key": "status",
+									"value": "PENDING",
+									"description": "Optional: PENDING or REPLIED"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Reply Suggestion",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"replyContent\": \"Thank you for your suggestion.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/suggestions/:id/reply",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"suggestions",
+								":id",
+								"reply"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "suggestion_id"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Monitoring",
+			"item": [
+				{
+					"name": "Dashboard",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/monitoring/dashboard?timeRange=monthly",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"monitoring",
+								"dashboard"
+							],
+							"query": [
+								{
+									"key": "timeRange",
+									"value": "monthly",
+									"description": "daily, weekly, monthly, yearly"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Filters",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/monitoring/filters",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"monitoring",
+								"filters"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Overview",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/monitoring/overview?college=&grade=&clazz=",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"monitoring",
+								"overview"
+							],
+							"query": [
+								{
+									"key": "college",
+									"value": ""
+								},
+								{
+									"key": "grade",
+									"value": ""
+								},
+								{
+									"key": "clazz",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "User Stats",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"page\": 1,\n    \"pageSize\": 10,\n    \"college\": null,\n    \"grade\": null,\n    \"clazz\": null,\n    \"sortField\": \"total_hours\",\n    \"sortOrder\": \"desc\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/monitoring/user-stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"monitoring",
+								"user-stats"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "File",
+			"item": [
+				{
+					"name": "Download",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/files/download?path=/attachments/file.pdf",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"files",
+								"download"
+							],
+							"query": [
+								{
+									"key": "path",
+									"value": "/attachments/file.pdf"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Preview",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/files/preview?path=/attachments/file.pdf",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"files",
+								"preview"
+							],
+							"query": [
+								{
+									"key": "path",
+									"value": "/attachments/file.pdf"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Error Scenarios",
+			"item": [
+				{
+					"name": "Unauthenticated Access",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/activities/MyActivities",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"activities",
+								"MyActivities"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Invalid Login",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/user/login?studentNo=20210001&password=wrongpassword",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"user",
+								"login"
+							],
+							"query": [
+								{
+									"key": "studentNo",
+									"value": "20210001"
+								},
+								{
+									"key": "password",
+									"value": "wrongpassword"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Validation Error (Missing Fields)",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/suggestions",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"suggestions"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8080/api",
+			"type": "string"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
+		}
+	]
+}

@@ -27,6 +27,10 @@ public class ActivityVO {
     private OffsetDateTime endTime;
     @JsonProperty("CoverPath")
     private String coverPath;
+    /**
+     * Cover image URL path (e.g., "/covers/xxx.jpg")
+     * Frontend should use this URL directly to load images with browser caching
+     */
     @JsonProperty("CoverImage")
     private String coverImage;
     @JsonProperty("maxParticipants")

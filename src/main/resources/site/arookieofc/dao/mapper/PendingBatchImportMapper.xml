@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.PendingBatchImportMapper">
+
+    <resultMap id="PendingBatchImportResultMap" type="site.arookieofc.dao.entity.PendingBatchImport">
+        <id column="id" property="id"/>
+        <result column="submitted_by" property="submittedBy"/>
+        <result column="original_filename" property="originalFilename"/>
+        <result column="total_records" property="totalRecords"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="status" property="status"/>
+        <result column="reviewed_at" property="reviewedAt"/>
+        <result column="reviewed_by" property="reviewedBy"/>
+        <result column="rejected_reason" property="rejectedReason"/>
+    </resultMap>
+
+    <resultMap id="PendingBatchImportRecordResultMap" type="site.arookieofc.dao.entity.PendingBatchImportRecord">
+        <id column="id" property="id"/>
+        <result column="batch_id" property="batchId"/>
+        <result column="username" property="username"/>
+        <result column="gender" property="gender"/>
+        <result column="college" property="college"/>
+        <result column="grade" property="grade"/>
+        <result column="student_no" property="studentNo"/>
+        <result column="phone" property="phone"/>
+        <result column="duration" property="duration"/>
+        <result column="activity_name" property="activityName"/>
+        <result column="original_activity_name" property="originalActivityName"/>
+        <result column="user_exists" property="userExists"/>
+    </resultMap>
+
+    <!-- 主表操作 -->
+    <select id="getById" resultMap="PendingBatchImportResultMap">
+        SELECT id, submitted_by, original_filename, total_records, created_at,
+               status, reviewed_at, reviewed_by, rejected_reason
+        FROM pending_batch_imports
+        WHERE id = #{id}
+    </select>
+
+    <select id="listAll" resultMap="PendingBatchImportResultMap">
+        SELECT id, submitted_by, original_filename, total_records, created_at,
+               status, reviewed_at, reviewed_by, rejected_reason
+        FROM pending_batch_imports
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="listByStatus" resultMap="PendingBatchImportResultMap">
+        SELECT id, submitted_by, original_filename, total_records, created_at,
+               status, reviewed_at, reviewed_by, rejected_reason
+        FROM pending_batch_imports
+        WHERE status = #{status}
+        ORDER BY created_at DESC
+    </select>
+
+    <select id="listBySubmitter" resultMap="PendingBatchImportResultMap">
+        SELECT id, submitted_by, original_filename, total_records, created_at,
+               status, reviewed_at, reviewed_by, rejected_reason
+        FROM pending_batch_imports
+        WHERE submitted_by = #{submittedBy}
+        ORDER BY created_at DESC
+    </select>
+
+    <insert id="insert" parameterType="site.arookieofc.dao.entity.PendingBatchImport">
+        INSERT INTO pending_batch_imports (id, submitted_by, original_filename, total_records, created_at, status)
+        VALUES (#{id}, #{submittedBy}, #{originalFilename}, #{totalRecords}, #{createdAt}, #{status})
+    </insert>
+
+    <update id="updateStatus">
+        UPDATE pending_batch_imports
+        SET status = #{status},
+            reviewed_at = #{reviewedAt},
+            reviewed_by = #{reviewedBy},
+            rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+    </update>
+
+    <delete id="delete">
+        DELETE FROM pending_batch_imports WHERE id = #{id}
+    </delete>
+
+    <select id="listPaged" resultMap="PendingBatchImportResultMap">
+        SELECT id, submitted_by, original_filename, total_records, created_at,
+               status, reviewed_at, reviewed_by, rejected_reason
+        FROM pending_batch_imports
+        <where>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="submittedBy != null and submittedBy != ''">AND submitted_by = #{submittedBy}</if>
+        </where>
+        ORDER BY created_at DESC
+        LIMIT #{pageSize} OFFSET #{offset}
+    </select>
+
+    <select id="countFiltered" resultType="int">
+        SELECT COUNT(1)
+        FROM pending_batch_imports
+        <where>
+            <if test="status != null and status != ''">AND status = #{status}</if>
+            <if test="submittedBy != null and submittedBy != ''">AND submitted_by = #{submittedBy}</if>
+        </where>
+    </select>
+
+    <!-- 详情表操作 -->
+    <select id="getRecordsByBatchId" resultMap="PendingBatchImportRecordResultMap">
+        SELECT id, batch_id, username, gender, college, grade, student_no, phone,
+               duration, activity_name, original_activity_name, user_exists
+        FROM pending_batch_import_records
+        WHERE batch_id = #{batchId}
+        ORDER BY id
+    </select>
+
+    <insert id="insertRecord" parameterType="site.arookieofc.dao.entity.PendingBatchImportRecord" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO pending_batch_import_records
+            (batch_id, username, gender, college, grade, student_no, phone, duration, activity_name, original_activity_name, user_exists)
+        VALUES
+            (#{batchId}, #{username}, #{gender}, #{college}, #{grade}, #{studentNo}, #{phone}, #{duration}, #{activityName}, #{originalActivityName}, #{userExists})
+    </insert>
+
+    <insert id="insertRecords" parameterType="list">
+        INSERT INTO pending_batch_import_records
+            (batch_id, username, gender, college, grade, student_no, phone, duration, activity_name, original_activity_name, user_exists)
+        VALUES
+        <foreach collection="records" item="r" separator=",">
+            (#{r.batchId}, #{r.username}, #{r.gender}, #{r.college}, #{r.grade}, #{r.studentNo}, #{r.phone}, #{r.duration}, #{r.activityName}, #{r.originalActivityName}, #{r.userExists})
+        </foreach>
+    </insert>
+
+    <delete id="deleteRecordsByBatchId">
+        DELETE FROM pending_batch_import_records WHERE batch_id = #{batchId}
+    </delete>
+
+</mapper>
+

@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.dao.entity.Suggestion;
 import site.arookieofc.dao.entity.Suggestion.SuggestionStatus;
 import site.arookieofc.dao.mapper.SuggestionMapper;
@@ -100,7 +101,7 @@ public class SuggestionService {
     public SuggestionDTO replySuggestion(String id, String replyContent) {
         Suggestion suggestion = suggestionMapper.getById(id);
         if (suggestion == null) {
-            throw new IllegalArgumentException("Suggestion not found");
+            throw BusinessException.notFound("NOT_FOUND");
         }
 
         LocalDateTime replyTime = LocalDateTime.now();
@@ -127,7 +128,7 @@ public class SuggestionService {
     public SuggestionDTO getSuggestionById(String id) {
         Suggestion suggestion = suggestionMapper.getById(id);
         if (suggestion == null) {
-            throw new IllegalArgumentException("Suggestion not found");
+            throw BusinessException.notFound("NOT_FOUND");
         }
 
         SuggestionDTO dto = SuggestionDTO.fromEntity(suggestion, ZONE);

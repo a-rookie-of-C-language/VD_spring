@@ -17,9 +17,9 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Component
-public final class JWTUtils {
-    private static long expiryMinutes;
-    private static byte[] SECRET_BYTES;
+public class JWTUtils {
+    private long expiryMinutes;
+    private byte[] secretBytes;
 
     @Value("${app.security.jwt.expiry-minutes:120}")
     private long expiryMinutesConfig;
@@ -30,17 +30,18 @@ public final class JWTUtils {
     private void init() {
         expiryMinutes = expiryMinutesConfig;
         if (jwtSecretConfig != null && jwtSecretConfig.length() >= 32) {
-            SECRET_BYTES = jwtSecretConfig.getBytes();
+            secretBytes = jwtSecretConfig.getBytes();
         } else {
-            SECRET_BYTES = Keys.secretKeyFor(SignatureAlgorithm.HS256).getEncoded();
+            throw new IllegalStateException(
+                    "JWT secret not configured or too short (>=32 chars). Set app.security.jwt.secret");
         }
     }
 
-    public static String generateToken(String subject) {
+    public String generateToken(String subject) {
         return generateToken(subject, null);
     }
 
-    public static String generateToken(String subject, Map<String, Object> claims) {
+    public String generateToken(String subject, Map<String, Object> claims) {
         Instant now = Instant.now();
         Instant exp = now.plus(expiryMinutes, ChronoUnit.MINUTES);
         Map<String, Object> payload = claims == null ? new HashMap<>() : new HashMap<>(claims);
@@ -49,23 +50,23 @@ public final class JWTUtils {
                 .setSubject(subject)
                 .setIssuedAt(Date.from(now))
                 .setExpiration(Date.from(exp))
-                .signWith(Keys.hmacShaKeyFor(SECRET_BYTES), SignatureAlgorithm.HS256)
+                .signWith(Keys.hmacShaKeyFor(secretBytes), SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    public static Claims parseToken(String token) {
+    public Claims parseToken(String token) {
         return Jwts.parserBuilder()
-                .setSigningKey(Keys.hmacShaKeyFor(SECRET_BYTES))
+                .setSigningKey(Keys.hmacShaKeyFor(secretBytes))
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
 
-    public static String getSubject(String token) {
+    public String getSubject(String token) {
         return parseToken(token).getSubject();
     }
 
-    public static boolean isExpired(String token) {
+    public boolean isExpired(String token) {
         Date exp = parseToken(token).getExpiration();
         return exp != null && exp.before(new Date());
     }
@@ -74,13 +75,13 @@ public final class JWTUtils {
      * 安全解析Token，返回包含详细错误信息的结果
      * 前端可根据message字段获取具体的错误原因
      */
-    public static TokenParseResult parseTokenSafe(String token) {
+    public TokenParseResult parseTokenSafe(String token) {
         if (token == null || token.trim().isEmpty()) {
             return TokenParseResult.empty();
         }
         try {
             Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(Keys.hmacShaKeyFor(SECRET_BYTES))
+                    .setSigningKey(Keys.hmacShaKeyFor(secretBytes))
                     .build()
                     .parseClaimsJws(token)
                     .getBody();
@@ -96,4 +97,3 @@ public final class JWTUtils {
         }
     }
 }
-

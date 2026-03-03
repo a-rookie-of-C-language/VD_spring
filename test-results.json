@@ -1,0 +1,189 @@
+{
+  "total": 27,
+  "passed": 25,
+  "failed": 2,
+  "categories": {
+    "authentication": {
+      "total": 7,
+      "passed": 6,
+      "tests": [
+        {
+          "name": "Login - superAdmin",
+          "passed": true,
+          "details": "Token obtained"
+        },
+        {
+          "name": "Token Validation - superAdmin",
+          "passed": true,
+          "details": ""
+        },
+        {
+          "name": "Get User Info - superAdmin",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "name": "Login - functionary",
+          "passed": true,
+          "details": "Token obtained"
+        },
+        {
+          "name": "Token Validation - functionary",
+          "passed": true,
+          "details": ""
+        },
+        {
+          "name": "Get User Info - functionary",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "name": "Reject Invalid Credentials",
+          "passed": false,
+          "details": "HTTP 200"
+        }
+      ]
+    },
+    "activities": {
+      "total": 3,
+      "passed": 3,
+      "tests": [
+        {
+          "name": "Query all activities",
+          "passed": true,
+          "details": "4ms"
+        },
+        {
+          "name": "Query with pagination",
+          "passed": true,
+          "details": "5ms"
+        },
+        {
+          "name": "Query with filters",
+          "passed": true,
+          "details": "5ms"
+        }
+      ]
+    },
+    "enrollment": {
+      "total": 0,
+      "passed": 0,
+      "tests": []
+    },
+    "statistics": {
+      "total": 2,
+      "passed": 2,
+      "tests": [
+        {
+          "name": "Personal Statistics - superAdmin",
+          "passed": true,
+          "details": "HTTP 200"
+        },
+        {
+          "name": "Personal Statistics - functionary",
+          "passed": true,
+          "details": "HTTP 200"
+        }
+      ]
+    },
+    "monitoring": {
+      "total": 1,
+      "passed": 1,
+      "tests": [
+        {
+          "name": "Monitoring Dashboard",
+          "passed": true,
+          "details": "3ms"
+        }
+      ]
+    },
+    "errorHandling": {
+      "total": 3,
+      "passed": 2,
+      "tests": [
+        {
+          "name": "Protect routes without token",
+          "passed": true,
+          "details": "HTTP 401"
+        },
+        {
+          "name": "Reject empty credentials",
+          "passed": false,
+          "details": ""
+        },
+        {
+          "name": "Validate query parameters",
+          "passed": true,
+          "details": "Request handled"
+        }
+      ]
+    },
+    "frontend": {
+      "total": 7,
+      "passed": 7,
+      "tests": [
+        {
+          "name": "Login Page",
+          "passed": true,
+          "details": "3ms"
+        },
+        {
+          "name": "Activities List",
+          "passed": true,
+          "details": "1ms"
+        },
+        {
+          "name": "Add Activity",
+          "passed": true,
+          "details": "2ms"
+        },
+        {
+          "name": "Personal Statistics",
+          "passed": true,
+          "details": "2ms"
+        },
+        {
+          "name": "System Monitor",
+          "passed": true,
+          "details": "2ms"
+        },
+        {
+          "name": "Request Hours",
+          "passed": true,
+          "details": "1ms"
+        },
+        {
+          "name": "Admin Review",
+          "passed": true,
+          "details": "1ms"
+        }
+      ]
+    },
+    "performance": {
+      "total": 4,
+      "passed": 4,
+      "tests": [
+        {
+          "name": "Get Current User",
+          "passed": true,
+          "details": "4ms"
+        },
+        {
+          "name": "Get Personal Status",
+          "passed": true,
+          "details": "3ms"
+        },
+        {
+          "name": "Query Activities",
+          "passed": true,
+          "details": "3ms"
+        },
+        {
+          "name": "Monitoring Dashboard",
+          "passed": true,
+          "details": "4ms"
+        }
+      ]
+    }
+  }
+}

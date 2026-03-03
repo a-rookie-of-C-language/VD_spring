@@ -1,27 +1,21 @@
 package site.arookieofc.controller;
 
-import io.jsonwebtoken.Claims;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import site.arookieofc.controller.VO.Result;
 import site.arookieofc.controller.VO.UserVO;
-import site.arookieofc.dao.entity.User;
 import site.arookieofc.security.UserPrincipal;
-import site.arookieofc.service.BO.Role;
 import site.arookieofc.service.UserService;
 import site.arookieofc.service.dto.UserDTO;
 import site.arookieofc.util.JWTUtils;
 import site.arookieofc.util.TokenParseResult;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @RestController
@@ -29,25 +23,22 @@ import java.util.Optional;
 public class UserController {
 
     private final UserService userService;
+    private final JWTUtils jwtUtils;
 
     @GetMapping("/getUser")
     public Result getUser(@AuthenticationPrincipal UserPrincipal principal) {
-        if (principal == null) {
-            return Result.error("未登录或Token无效");
-        }
-        Optional<UserDTO> userOpt = userService.getUserByStudentNo(principal.getUsername());
-        return userOpt.map(dto -> Result.success(UserVO.fromDTO(dto))).orElseGet(() -> Result.error("用户不存在"));
+        Optional<UserDTO> userOpt = userService.getUserByStudentNo(principal.getStudentNo());
+        return userOpt.map(dto -> Result.success(UserVO.fromDTO(dto)))
+                .orElseGet(() -> Result.error("用户不存在"));
     }
 
-
     @GetMapping("/verifyToken")
-    public Result verifyToken(@RequestHeader(value = "Authorization", required = false)
-                                  String authHeader) {
+    public Result verifyToken(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
             return Result.of(401, "Token不能为空", null);
         }
         String token = authHeader.substring(7);
-        TokenParseResult result = JWTUtils.parseTokenSafe(token);
+        TokenParseResult result = jwtUtils.parseTokenSafe(token);
         if (result.isSuccess()) {
             return Result.success(null, result.getMessage());
         } else {
@@ -58,21 +49,20 @@ public class UserController {
     @GetMapping("/getUserByStudentNo")
     public Result getUserByStudentNo(@RequestParam("studentNo") String studentNo) {
         Optional<UserDTO> userOpt = userService.getUserByStudentNo(studentNo);
-        return userOpt.map(dto -> Result.success(UserVO.fromDTO(dto))).orElseGet(() -> Result.error("User not found"));
+        return userOpt.map(dto -> Result.success(UserVO.fromDTO(dto)))
+                .orElseGet(() -> Result.error("User not found"));
     }
 
-    @GetMapping("/login")
-    public Result login(@RequestParam("studentNo") String studentNo,
-                        @RequestParam("password") String password) {
-        Optional<UserDTO> userOpt = userService.login(studentNo, password);
+    @PostMapping("/login")
+    public Result login(@RequestBody LoginRequest request) {
+        Optional<UserDTO> userOpt = userService.login(request.getStudentNo(), request.getPassword());
 
         if (userOpt.isPresent()) {
             UserDTO user = userOpt.get();
             Map<String, Object> claims = new HashMap<>();
             claims.put("username", user.getUsername());
             claims.put("role", user.getRole().name());
-            // Generate token with user info in claims
-            String token = JWTUtils.generateToken(studentNo, claims);
+            String token = jwtUtils.generateToken(user.getStudentNo(), claims);
 
             Map<String, Object> data = new HashMap<>();
             data.put("token", token);
@@ -88,10 +78,16 @@ public class UserController {
 
     @GetMapping("/listAll")
     public Result listAllUsers() {
-        java.util.List<UserDTO> users = userService.listAllUsers();
-        java.util.List<UserVO> userVOs = users.stream()
+        List<UserDTO> users = userService.listAllUsers();
+        List<UserVO> userVOs = users.stream()
                 .map(UserVO::fromDTO)
-                .collect(java.util.stream.Collectors.toList());
+                .collect(Collectors.toList());
         return Result.success(userVOs);
+    }
+
+    @lombok.Data
+    public static class LoginRequest {
+        private String studentNo;
+        private String password;
     }
 }

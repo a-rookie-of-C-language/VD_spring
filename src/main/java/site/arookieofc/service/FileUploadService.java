@@ -149,16 +149,48 @@ public class FileUploadService {
             String ct = Files.probeContentType(filePath);
             if (ct == null) {
                 String ext = FilenameUtils.getExtension(filePath.getFileName().toString()).toLowerCase();
-                if ("png".equals(ext)) ct = "image/png";
-                else if ("jpg".equals(ext) || "jpeg".equals(ext)) ct = "image/jpeg";
-                else if ("gif".equals(ext)) ct = "image/gif";
-                else if ("webp".equals(ext)) ct = "image/webp";
-                else ct = "application/octet-stream";
+                ct = switch (ext) {
+                    case "png" -> "image/png";
+                    case "jpg", "jpeg" -> "image/jpeg";
+                    case "gif" -> "image/gif";
+                    case "webp" -> "image/webp";
+                    default -> "application/octet-stream";
+                };
             }
             String b64 = Base64.getEncoder().encodeToString(bytes);
             return "data:" + ct + ";base64," + b64;
         } catch (Exception e) {
             return null;
+        }
+    }
+
+    /**
+     * Get cover image URL (recommended for better performance and caching)
+     *
+     * @param relativePath Relative path to the image
+     * @return URL path to access the image directly, or null if path is invalid
+     */
+    public String getCoverImageUrl(String relativePath) {
+        if (relativePath == null || relativePath.isEmpty()) {
+            return null;
+        }
+
+        // Verify file exists
+        String normalizedPath = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
+        Path filePath = Paths.get(basePath, normalizedPath);
+        if (!Files.exists(filePath)) {
+            return null;
+        }
+
+        // Return path with /files prefix for AttachmentController
+        // Input: /covers/xxx.png -> Output: /files/covers/xxx.png
+        if (relativePath.startsWith("/covers/")) {
+            return "/files" + relativePath;
+        } else if (relativePath.startsWith("covers/")) {
+            return "/files/" + relativePath;
+        } else {
+            // Handle legacy paths without /covers/ prefix
+            return "/files/covers" + (relativePath.startsWith("/") ? "" : "/") + relativePath;
         }
     }
 

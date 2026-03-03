@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.arookieofc.common.exception.BusinessException;
 import org.springframework.web.multipart.MultipartFile;
 import site.arookieofc.dao.entity.PersonalHourRequest;
 import site.arookieofc.dao.entity.User;
@@ -101,7 +102,7 @@ public class PersonalHourRequestService {
     public PersonalHourRequestDTO getRequestById(String id) {
         PersonalHourRequest entity = requestMapper.getById(id);
         if (entity == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
         PersonalHourRequestDTO dto = PersonalHourRequestDTO.fromEntity(entity, ZONE);
 
@@ -187,11 +188,11 @@ public class PersonalHourRequestService {
     public PersonalHourRequestDTO reviewRequest(String id, boolean approved, String reason, String reviewerStudentNo) {
         PersonalHourRequest entity = requestMapper.getById(id);
         if (entity == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
 
         if (entity.getStatus() != ActivityStatus.UnderReview) {
-            throw new IllegalArgumentException("ALREADY_REVIEWED");
+            throw BusinessException.badRequest("ALREADY_REVIEWED");
         }
 
         ActivityStatus newStatus = approved ? ActivityStatus.ActivityEnded : ActivityStatus.FailReview;
@@ -224,16 +225,16 @@ public class PersonalHourRequestService {
     public void deleteRequest(String id, String applicantStudentNo) {
         PersonalHourRequest entity = requestMapper.getById(id);
         if (entity == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
 
         // Only allow applicant to delete their own pending request
         if (!entity.getApplicantStudentNo().equals(applicantStudentNo)) {
-            throw new IllegalArgumentException("FORBIDDEN");
+            throw BusinessException.forbidden("FORBIDDEN");
         }
 
         if (entity.getStatus() != ActivityStatus.UnderReview) {
-            throw new IllegalArgumentException("CANNOT_DELETE_REVIEWED");
+            throw BusinessException.badRequest("CANNOT_DELETE_REVIEWED");
         }
 
         // Delete attachments files

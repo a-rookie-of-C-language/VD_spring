@@ -6,8 +6,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import site.arookieofc.controller.VO.*;
+import site.arookieofc.dao.entity.PendingBatchImport;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.ActivityService;
+import site.arookieofc.service.BatchImportService;
 import site.arookieofc.service.UserService;
 import site.arookieofc.service.FileUploadService;
 import site.arookieofc.service.BO.ActivityStatus;
@@ -17,6 +19,8 @@ import site.arookieofc.service.dto.ActivityImportDTO;
 import site.arookieofc.service.dto.UserDTO;
 import org.apache.commons.io.FilenameUtils;
 
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
@@ -32,6 +36,9 @@ public class ActivityController {
     private final UserService userService;
     private final site.arookieofc.service.PendingActivityService pendingActivityService;
     private final FileUploadService fileUploadService;
+    private final BatchImportService batchImportService;
+
+    private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     /**
      * 新的查询接口 - 使用 POST + RequestBody
@@ -82,47 +89,6 @@ public class ActivityController {
         return Result.success(data);
     }
 
-    /**
-     * 旧的查询接口 - 保持向后兼容
-     * @deprecated 推荐使用 POST /api/activities/query
-     */
-    @Deprecated
-    public Result list(@AuthenticationPrincipal UserPrincipal principal,
-                       @RequestBody(required = false) ActivityListRequestVO request) {
-        // 如果request为null，使用默认值
-        if (request == null) {
-            request = ActivityListRequestVO.builder().build();
-        }
-
-        int page = request.getPage() != null ? request.getPage() : 1;
-        int pageSize = request.getPageSize() != null ? request.getPageSize() : 10;
-        ActivityType type = request.getType();
-        ActivityStatus status = request.getStatus();
-        String functionary = request.getFunctionary();
-        String name = request.getName();
-        String startFrom = request.getStartFrom();
-        String startTo = request.getStartTo();
-        Boolean isFull = request.getIsFull();
-
-        OffsetDateTime sf = startFrom == null || startFrom.isEmpty() ? null : OffsetDateTime.parse(startFrom);
-        OffsetDateTime st = startTo == null || startTo.isEmpty() ? null : OffsetDateTime.parse(startTo);
-
-        String role = principal != null ? principal.getRole() : null;
-        String studentNo = principal != null ? principal.getStudentNo() : null;
-        boolean useAll = status != null || (("admin".equals(role) || "superAdmin".equals(role))) || ("functionary".equals(role) && functionary != null && functionary.equals(studentNo));
-        int total = useAll ? activityService.countActivitiesAll(type, status, functionary, name, sf, st, isFull)
-                : activityService.countActivities(type, status, functionary, name, sf, st, isFull);
-        List<ActivityDTO> dtos = useAll ? activityService.listActivitiesPagedAll(type, status, functionary, name, sf, st, isFull, page, pageSize)
-                : activityService.listActivitiesPaged(type, status, functionary, name, sf, st, isFull, page, pageSize);
-        List<ActivityVO> items = dtos.stream().map(ActivityVO::fromDTO).collect(java.util.stream.Collectors.toList());
-        ActivityPageVO data = ActivityPageVO.builder()
-                .items(items)
-                .total(total)
-                .page(page)
-                .pageSize(pageSize)
-                .build();
-        return Result.success(data);
-    }
 
     @PostMapping(consumes = {"multipart/form-data"})
     public Result create(@ModelAttribute ActivityDTO dto) {
@@ -134,33 +100,15 @@ public class ActivityController {
     public Result update(@PathVariable("id") String id,
                          @AuthenticationPrincipal UserPrincipal principal,
                          @ModelAttribute ActivityDTO dto) {
-        try {
-            dto.setFunctionary(principal.getStudentNo());
-            ActivityDTO updated = activityService.updateActivity(id, dto);
-            return Result.success(ActivityVO.fromDTO(updated));
-        } catch (IllegalArgumentException e) {
-            String msg = e.getMessage();
-            if ("NOT_FOUND".equals(msg)) {
-                return Result.of(404, "NOT_FOUND", null);
-            }
-            if ("REVIEW_PASSED".equals(msg)) {
-                return Result.of(400, "REVIEW_PASSED", null);
-            }
-            return Result.error(msg);
-        }
+        dto.setFunctionary(principal.getStudentNo());
+        ActivityDTO updated = activityService.updateActivity(id, dto);
+        return Result.success(ActivityVO.fromDTO(updated));
     }
 
     @GetMapping("/{id}")
     public Result getById(@PathVariable("id") String id) {
-        try {
-            ActivityDTO dto = activityService.getActivityById(id);
-            return Result.success(ActivityVO.fromDTO(dto));
-        } catch (IllegalArgumentException e) {
-            if ("NOT_FOUND".equals(e.getMessage())) {
-                return Result.of(404, "NOT_FOUND", null);
-            }
-            return Result.error(e.getMessage());
-        }
+        ActivityDTO dto = activityService.getActivityById(id);
+        return Result.success(ActivityVO.fromDTO(dto));
     }
 
     @DeleteMapping("/{id}")
@@ -180,69 +128,23 @@ public class ActivityController {
     @PostMapping("/{id}/enroll")
     public Result enroll(@PathVariable("id") String id,
                          @AuthenticationPrincipal UserPrincipal principal) {
-        if (principal == null) {
-            return Result.of(401, "UNAUTHORIZED", null);
-        }
-        String studentNo = principal.getStudentNo();
-        String code = activityService.enroll(id, studentNo);
-        if ("OK".equals(code)) {
-            return Result.success();
-        }
-        if ("NOT_FOUND".equals(code)) {
-            return Result.of(404, "NOT_FOUND", null);
-        }
-        if ("CAPACITY_FULL".equals(code)) {
-            return Result.of(409, "CAPACITY_FULL", null);
-        }
-        if ("ALREADY_ENROLLED".equals(code)) {
-            return Result.of(409, "ALREADY_ENROLLED", null);
-        }
-        return Result.error("UNKNOWN_ERROR");
+        activityService.enroll(id, principal.getStudentNo());
+        return Result.success();
     }
 
     @PostMapping("/{id}/unenroll")
     public Result unenroll(@PathVariable("id") String id,
                            @AuthenticationPrincipal UserPrincipal principal) {
-        if (principal == null) {
-            return Result.of(401, "UNAUTHORIZED", null);
-        }
-        String studentNo = principal.getStudentNo();
-        String code = activityService.unenroll(id, studentNo);
-        if ("OK".equals(code)) {
-            return Result.success();
-        }
-        if ("NOT_FOUND".equals(code)) {
-            return Result.of(404, "NOT_FOUND", null);
-        }
-        if ("FUNCTIONARY_CANNOT_UNENROLL".equals(code)) {
-            return Result.of(403, "FUNCTIONARY_CANNOT_UNENROLL", null);
-        }
-        if ("ENROLLMENT_ENDED".equals(code)) {
-            return Result.of(400, "ENROLLMENT_ENDED", null);
-        }
-        if ("NOT_ENROLLED".equals(code)) {
-            return Result.of(409, "NOT_ENROLLED", null);
-        }
-        return Result.error("UNKNOWN_ERROR");
+        activityService.unenroll(id, principal.getStudentNo());
+        return Result.success();
     }
 
     @PostMapping("/{id}/review")
     public Result review(@PathVariable("id") String id,
                          @RequestParam("approve") boolean approve,
                          @RequestParam(value = "reason", required = false) String reason) {
-        try {
-            ActivityDTO dto = activityService.reviewActivity(id, approve, reason);
-            return Result.success(ActivityVO.fromDTO(dto));
-        } catch (IllegalArgumentException e) {
-            String msg = e.getMessage();
-            if ("NOT_FOUND".equals(msg)) {
-                return Result.of(404, "NOT_FOUND", null);
-            }
-            if ("INVALID_TIME".equals(msg) || "ENROLLMENT_PASSED".equals(msg)) {
-                return Result.of(400, msg, null);
-            }
-            return Result.error(msg);
-        }
+        ActivityDTO dto = activityService.reviewActivity(id, approve, reason);
+        return Result.success(ActivityVO.fromDTO(dto));
     }
 
     @GetMapping("/MyActivities")
@@ -251,43 +153,100 @@ public class ActivityController {
                                   @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize) {
         // Authentication handled by Spring Security
         String studentNo = principal.getStudentNo();
-        int total = activityService.countActivitiesAll(null, null, studentNo, null, null, null, null);
-        List<ActivityDTO> dtos = activityService
+
+        // 获取普通活动（用户作为functionary创建的）
+        List<ActivityDTO> activityDtos = activityService
                 .listActivitiesPagedAll(null, null, studentNo,
-                        null, null, null, null, page, pageSize);
-        List<ActivityVO> items = dtos
-                .stream()
+                        null, null, null, null, 1, Integer.MAX_VALUE); // 获取所有，后面统一分页
+
+        List<MyActivityItemVO> allItems = new ArrayList<>();
+
+        // 添加普通活动
+        allItems.addAll(activityDtos.stream()
                 .map(ActivityVO::fromDTO)
-                .collect(Collectors.toList());
-        ActivityPageVO data = ActivityPageVO.builder()
-                .items(items)
+                .map(MyActivityItemVO::fromActivityVO)
+                .collect(Collectors.toList()));
+
+        // 获取待审核的活动导入（PendingActivity）
+        List<site.arookieofc.dao.entity.PendingActivity> pendingActivities =
+                pendingActivityService.listAllPendingActivities().stream()
+                        .filter(dto -> studentNo.equals(dto.getSubmittedBy()))
+                        .map(dto -> {
+                            // 从DTO转换回Entity用于MyActivityItemVO
+                            return site.arookieofc.dao.entity.PendingActivity.builder()
+                                    .id(dto.getId())
+                                    .functionary(dto.getFunctionary())
+                                    .name(dto.getName())
+                                    .type(dto.getType())
+                                    .description(dto.getDescription())
+                                    .duration(dto.getDuration())
+                                    .endTime(dto.getEndTime() == null ? null :
+                                            dto.getEndTime().atZoneSameInstant(ZONE).toLocalDateTime())
+                                    .coverPath(dto.getCoverPath())
+                                    .createdAt(dto.getCreatedAt() == null ? null :
+                                              dto.getCreatedAt().atZoneSameInstant(ZONE).toLocalDateTime())
+                                    .submittedBy(dto.getSubmittedBy())
+                                    .attachment(dto.getAttachment())
+                                    .participants(dto.getParticipants())
+                                    .status(dto.getStatus())
+                                    .build();
+                        })
+                        .collect(Collectors.toList());
+
+        // 添加待审核活动
+        allItems.addAll(pendingActivities.stream()
+                .map(pa -> MyActivityItemVO.fromPendingActivity(pa, ZONE))
+                .collect(Collectors.toList()));
+
+        // 获取批量导入项目（审核中和审核失败的）
+        List<PendingBatchImport> pendingBatchImports = batchImportService
+                .getPendingBatchImportsBySubmitter(studentNo);
+
+        // 添加审核中和审核失败的批量导入
+        allItems.addAll(pendingBatchImports.stream()
+                .filter(bi -> "PENDING".equals(bi.getStatus()) || "REJECTED".equals(bi.getStatus()))
+                .map(bi -> MyActivityItemVO.fromPendingBatchImport(bi, ZONE))
+                .collect(Collectors.toList()));
+
+        // 按创建时间倒序排序
+        allItems.sort((a, b) -> {
+            OffsetDateTime timeA = a.getCreatedAt() != null ? a.getCreatedAt() :
+                                   (a.getStartTime() != null ? a.getStartTime() : OffsetDateTime.MIN);
+            OffsetDateTime timeB = b.getCreatedAt() != null ? b.getCreatedAt() :
+                                   (b.getStartTime() != null ? b.getStartTime() : OffsetDateTime.MIN);
+            return timeB.compareTo(timeA); // 降序
+        });
+
+        // 手动分页
+        int total = allItems.size();
+        int startIndex = (page - 1) * pageSize;
+        int endIndex = Math.min(startIndex + pageSize, total);
+
+        List<MyActivityItemVO> pagedItems = startIndex < total ?
+                allItems.subList(startIndex, endIndex) : new ArrayList<>();
+
+        MyActivityPageVO data = MyActivityPageVO.builder()
+                .items(pagedItems)
                 .total(total)
                 .page(page)
                 .pageSize(pageSize)
                 .build();
+
         return Result.success(data);
     }
 
     @PostMapping("/import")
     public Result importActivity(@AuthenticationPrincipal UserPrincipal principal,
                                  @ModelAttribute ActivityImportDTO dto) {
-        if (principal == null) {
-            return Result.of(401, "UNAUTHORIZED", null);
-        }
-
         String role = principal.getRole();
         boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
 
-        try {
-            String activityId = pendingActivityService
-                    .importActivity(dto, principal.getStudentNo(), isAdmin);
-            Map<String, Object> result = new HashMap<>();
-            result.put("id", activityId);
-            result.put("status", isAdmin ? "APPROVED" : "PENDING_REVIEW");
-            return Result.success(result);
-        } catch (IllegalArgumentException e) {
-            return Result.error(e.getMessage());
-        }
+        String activityId = pendingActivityService
+                .importActivity(dto, principal.getStudentNo(), isAdmin);
+        Map<String, Object> result = new HashMap<>();
+        result.put("id", activityId);
+        result.put("status", isAdmin ? "APPROVED" : "PENDING_REVIEW");
+        return Result.success(result);
     }
 
     @GetMapping("/MyStatus")

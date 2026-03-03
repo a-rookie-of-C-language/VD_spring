@@ -13,6 +13,7 @@ import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.service.BO.ActivityType;
 import site.arookieofc.service.dto.ActivityImportDTO;
 import site.arookieofc.service.dto.PendingActivityDTO;
+import site.arookieofc.common.exception.BusinessException;
 
 import java.io.IOException;
 import java.time.ZoneId;
@@ -30,6 +31,7 @@ public class PendingActivityService {
     private final ExcelParserService excelParserService;
     private final VolunteerHourGrantService volunteerHourGrantService;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+
     @Transactional
     public String importActivity(ActivityImportDTO dto, String submittedBy, boolean isAdmin) {
         // Parse participants from both array and Excel file
@@ -154,11 +156,11 @@ public class PendingActivityService {
     public PendingActivityDTO getPendingActivityById(String id) {
         PendingActivity entity = pendingActivityMapper.getById(id);
         if (entity == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
         PendingActivityDTO dto = PendingActivityDTO.fromEntity(entity, ZONE);
         if (dto.getCoverPath() != null && !dto.getCoverPath().isEmpty()) {
-            dto.setCoverImage(fileUploadService.readCoverImageAsDataUrl(dto.getCoverPath()));
+            dto.setCoverImage(fileUploadService.getCoverImageUrl(dto.getCoverPath()));
         }
         return dto;
     }
@@ -168,7 +170,7 @@ public class PendingActivityService {
                 .map(entity -> {
                     PendingActivityDTO dto = PendingActivityDTO.fromEntity(entity, ZONE);
                     if (dto.getCoverPath() != null && !dto.getCoverPath().isEmpty()) {
-                        dto.setCoverImage(fileUploadService.readCoverImageAsDataUrl(dto.getCoverPath()));
+                        dto.setCoverImage(fileUploadService.getCoverImageUrl(dto.getCoverPath()));
                     }
                     return dto;
                 })
@@ -186,7 +188,7 @@ public class PendingActivityService {
                 .map(entity -> {
                     PendingActivityDTO dto = PendingActivityDTO.fromEntity(entity, ZONE);
                     if (dto.getCoverPath() != null && !dto.getCoverPath().isEmpty()) {
-                        dto.setCoverImage(fileUploadService.readCoverImageAsDataUrl(dto.getCoverPath()));
+                        dto.setCoverImage(fileUploadService.getCoverImageUrl(dto.getCoverPath()));
                     }
                     return dto;
                 })
@@ -207,7 +209,7 @@ public class PendingActivityService {
     public String approvePendingActivity(String id, String reviewerStudentNo) {
         PendingActivity pending = pendingActivityMapper.getById(id);
         if (pending == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
 
         java.time.LocalDateTime reviewedAt = java.time.LocalDateTime.now(ZONE);
@@ -271,7 +273,7 @@ public class PendingActivityService {
     public void rejectPendingActivity(String id, String reason, String reviewerStudentNo) {
         PendingActivity pending = pendingActivityMapper.getById(id);
         if (pending == null) {
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
 
         // Delete cover image if exists
@@ -295,4 +297,3 @@ public class PendingActivityService {
         pendingActivityMapper.delete(id);
     }
 }
-

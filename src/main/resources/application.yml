@@ -1,7 +1,24 @@
 server:
   port: 8080
+  # Enable compression for better performance
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,image/svg+xml
 
 spring:
+  web:
+    resources:
+      # Enable resource chain for cache optimization
+      chain:
+        strategy:
+          content:
+            enabled: true
+        cache: true
+      cache:
+        cachecontrol:
+          max-age: 30d
+          cache-public: true
+          must-revalidate: true
   datasource:
     url: jdbc:mysql://localhost:3306/VD?allowPublicKeyRetrieval=TRUE&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
     driver-class-name: com.mysql.cj.jdbc.Driver
@@ -59,3 +76,8 @@ app:
       expiry-minutes: 2400
   messaging:
     dev-mode-trigger: true
+
+mybatis:
+  configuration:
+    lazy-loading-enabled: true
+    aggressive-lazy-loading: false

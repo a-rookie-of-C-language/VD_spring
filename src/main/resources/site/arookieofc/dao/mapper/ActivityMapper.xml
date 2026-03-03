@@ -26,6 +26,28 @@
         <collection property="participants" ofType="java.lang.String" column="id" select="selectParticipantsByActivityId"/>
     </resultMap>
 
+    <resultMap id="ActivityBaseResultMap" type="site.arookieofc.dao.entity.Activity">
+        <id column="id" property="id"/>
+        <result column="functionary" property="functionary"/>
+        <result column="name" property="name"/>
+        <result column="type" property="type"/>
+        <result column="description" property="description"/>
+        <result column="enrollment_start_time" property="enrollmentStartTime"/>
+        <result column="enrollment_end_time" property="enrollmentEndTime"/>
+        <result column="start_time" property="startTime"/>
+        <result column="expected_end_time" property="expectedEndTime"/>
+        <result column="end_time" property="endTime"/>
+        <result column="cover_path" property="coverPath"/>
+        <result column="max_participants" property="maxParticipant"/>
+        <result column="status" property="status"/>
+        <result column="is_full" property="isFull"/>
+        <result column="duration" property="duration"/>
+        <result column="rejected_reason" property="rejectedReason"/>
+        <result column="imported" property="imported"/>
+        <result column="reviewed_at" property="reviewedAt"/>
+        <result column="reviewed_by" property="reviewedBy"/>
+    </resultMap>
+
     <select id="getById" resultMap="ActivityResultMap">
         SELECT id, functionary, name, type, description,
                enrollment_start_time, enrollment_end_time,
@@ -42,6 +64,14 @@
                rejected_reason, imported, reviewed_at, reviewed_by
         FROM activities
         ORDER BY start_time DESC
+  </select>
+
+  <select id="listAllBase" resultMap="ActivityBaseResultMap">
+        SELECT id, functionary, name, type, description,
+               enrollment_start_time, enrollment_end_time,
+               start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
+               rejected_reason, imported, reviewed_at, reviewed_by
+        FROM activities
   </select>
 
   <select id="countFiltered" resultType="int">
@@ -196,6 +226,16 @@
         FROM activities
         GROUP BY type
         ORDER BY count DESC
+    </select>
+
+    <select id="getByName" resultMap="ActivityResultMap">
+        SELECT id, functionary, name, type, description,
+               enrollment_start_time, enrollment_end_time,
+               start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
+               rejected_reason, imported, reviewed_at, reviewed_by
+        FROM activities
+        WHERE name = #{name}
+        LIMIT 1
     </select>
 
 </mapper>
