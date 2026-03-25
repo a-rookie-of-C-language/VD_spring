@@ -159,6 +159,9 @@ public class PendingActivityController {
         if (!isAdmin && !principal.getStudentNo().equals(dto.getSubmittedBy())) {
             throw BusinessException.forbidden("FORBIDDEN");
         }
+        if (dto.getStatus() != null && dto.getStatus() != site.arookieofc.service.BO.ActivityStatus.UnderReview) {
+            throw BusinessException.badRequest("CANNOT_DELETE_PROCESSED_PENDING_ACTIVITY");
+        }
 
         pendingActivityService.deletePendingActivity(id);
         return Result.success();

@@ -32,6 +32,10 @@ import java.util.UUID;
 @Slf4j
 @RequiredArgsConstructor
 public class VolunteerHourGrantService {
+    public static final String SOURCE_ACTIVITY = "ACTIVITY";
+    public static final String SOURCE_IMPORT = "BATCH_IMPORT";
+    public static final String SOURCE_PERSONAL_REQUEST = "PERSONAL_REQUEST";
+
     private final UserMapper userMapper;
     private final ActivityMapper activityMapper;
     private final PersonalHourRequestMapper personalHourRequestMapper;
@@ -141,7 +145,7 @@ public class VolunteerHourGrantService {
 
         // 为每个参与者发放时长
         int granted = 0;
-        String sourceType = activity.getImported() != null && activity.getImported() ? "IMPORT" : "ACTIVITY";
+        String sourceType = activity.getImported() != null && activity.getImported() ? SOURCE_IMPORT : SOURCE_ACTIVITY;
 
         for (String studentNo : participants) {
             boolean success = grantHoursToUser(
@@ -185,7 +189,7 @@ public class VolunteerHourGrantService {
         boolean success = grantHoursToUser(
             request.getApplicantStudentNo(),
             request.getDuration(),
-            "PERSONAL_REQUEST",
+            SOURCE_PERSONAL_REQUEST,
             requestId,
             request.getName()
         );
@@ -228,7 +232,7 @@ public class VolunteerHourGrantService {
             boolean success = grantHoursToUser(
                 studentNo,
                 duration,
-                "IMPORT",
+                SOURCE_IMPORT,
                 activityId,
                 activityName != null ? activityName : "导入活动"
             );

@@ -215,7 +215,7 @@ public class BatchImportService {
                         boolean granted = volunteerHourGrantService.grantHoursToUser(
                                 studentNo,
                                 duration,
-                                "BATCH_IMPORT",
+                                VolunteerHourGrantService.SOURCE_IMPORT,
                                 activityId,
                                 normalizedActivityName
                         );
@@ -508,7 +508,7 @@ public class BatchImportService {
                 Double duration = record.getDuration();
                 if (duration != null && duration > 0) {
                     boolean granted = volunteerHourGrantService.grantHoursToUser(
-                            studentNo, duration, "BATCH_IMPORT", activityId, normalizedActivityName);
+                            studentNo, duration, VolunteerHourGrantService.SOURCE_IMPORT, activityId, normalizedActivityName);
                     if (granted) {
                         hoursGranted++;
                     }
