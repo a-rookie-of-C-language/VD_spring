@@ -49,8 +49,7 @@ public class PendingActivityController {
         String role = principal != null ? principal.getRole() : null;
         String studentNo = principal != null ? principal.getStudentNo() : null;
 
-        // For functionary, only show their own submitted pending activities
-        if ("functionary".equals(role) && submittedBy == null) {
+        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
             submittedBy = studentNo;
         }
 
@@ -84,8 +83,7 @@ public class PendingActivityController {
         String role = principal != null ? principal.getRole() : null;
         String studentNo = principal != null ? principal.getStudentNo() : null;
 
-        // For functionary, only show their own submitted pending activities
-        if ("functionary".equals(role) && submittedBy == null) {
+        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
             submittedBy = studentNo;
         }
 
@@ -106,8 +104,14 @@ public class PendingActivityController {
      * Get pending activity by ID
      */
     @GetMapping("/{id}")
-    public Result getById(@PathVariable("id") String id) {
+    public Result getById(@AuthenticationPrincipal UserPrincipal principal,
+                          @PathVariable("id") String id) {
         PendingActivityDTO dto = pendingActivityService.getPendingActivityById(id);
+        String role = principal.getRole();
+        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
+        if (!isAdmin && !principal.getStudentNo().equals(dto.getSubmittedBy())) {
+            throw BusinessException.forbidden("FORBIDDEN");
+        }
         return Result.success(dto);
     }
 

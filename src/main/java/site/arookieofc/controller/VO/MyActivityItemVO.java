@@ -7,6 +7,7 @@ import site.arookieofc.dao.entity.PendingActivity;
 import site.arookieofc.dao.entity.PendingBatchImport;
 import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.service.BO.ActivityType;
+import site.arookieofc.service.dto.PendingActivityDTO;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -106,6 +107,31 @@ public class MyActivityItemVO {
                 .batchStatus("PENDING") // 待审核活动都是PENDING状态
                 .maxParticipants(pendingActivity.getParticipants() != null ?
                                 pendingActivity.getParticipants().size() : 0)
+                .build();
+    }
+
+    public static MyActivityItemVO fromPendingActivityDTO(PendingActivityDTO pendingActivity) {
+        return MyActivityItemVO.builder()
+                .id(pendingActivity.getId())
+                .itemType("PENDING_ACTIVITY")
+                .functionary(pendingActivity.getFunctionary())
+                .name(pendingActivity.getName())
+                .activityType(pendingActivity.getType())
+                .description(pendingActivity.getDescription())
+                .duration(pendingActivity.getDuration())
+                .endTime(pendingActivity.getEndTime())
+                .coverPath(pendingActivity.getCoverPath())
+                .coverImage(pendingActivity.getCoverImage())
+                .attachment(pendingActivity.getAttachment())
+                .participants(pendingActivity.getParticipants())
+                .status(pendingActivity.getStatus())
+                .createdAt(pendingActivity.getCreatedAt())
+                .reviewedAt(pendingActivity.getReviewedAt())
+                .reviewedBy(pendingActivity.getReviewedBy())
+                .rejectedReason(pendingActivity.getRejectedReason())
+                .submittedBy(pendingActivity.getSubmittedBy())
+                .batchStatus("PENDING")
+                .maxParticipants(pendingActivity.getParticipants() != null ? pendingActivity.getParticipants().size() : 0)
                 .build();
     }
 

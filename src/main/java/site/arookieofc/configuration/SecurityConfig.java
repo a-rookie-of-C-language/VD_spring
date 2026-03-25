@@ -23,6 +23,14 @@ import java.util.List;
 @Configuration
 @RequiredArgsConstructor
 public class SecurityConfig {
+    public static final List<String> ALLOWED_ORIGINS = List.of(
+            "http://localhost:5173",
+            "http://localhost:8080",
+            "https://arookieofc.site",
+            "http://arookieofc.site",
+            "https://unscreenable-cathrine-unprejudicially.ngrok-free.dev"
+    );
+
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
@@ -50,8 +58,11 @@ public class SecurityConfig {
                         .requestMatchers("/activities/*/review").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/pending-activities/*/approve", "/pending-activities/*/reject").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/pending-activities/batch-import/*/approve", "/pending-activities/batch-import/*/reject").hasAnyRole("ADMIN", "SUPERADMIN")
-                        .requestMatchers("/monitoring/**").hasRole("SUPERADMIN")
-                        .requestMatchers("/suggestions/*/reply").hasRole("SUPERADMIN")
+                        .requestMatchers("/activities/refreshStatuses").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers("/activities/attachment", "/activities/attachment/info").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers("/user/listAll").hasAnyRole("ADMIN", "SUPERADMIN")
+                        .requestMatchers("/monitoring/**", "/api/monitoring/**").hasRole("SUPERADMIN")
+                        .requestMatchers("/suggestions/*/reply").hasAnyRole("ADMIN", "SUPERADMIN")
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(e ->
@@ -77,11 +88,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration config = new CorsConfiguration();
-        config.setAllowedOrigins(List.of("http://localhost:5173",
-                "http://localhost:8080",
-                "https://arookieofc.site",
-                "http://arookieofc.site",
-                "https://unscreenable-cathrine-unprejudicially.ngrok-free.dev"));
+        config.setAllowedOrigins(ALLOWED_ORIGINS);
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("Authorization"));

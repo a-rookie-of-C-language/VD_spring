@@ -3,6 +3,7 @@ package site.arookieofc.controller;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.Result;
 import site.arookieofc.controller.VO.UserVO;
 import site.arookieofc.security.UserPrincipal;
@@ -47,7 +48,14 @@ public class UserController {
     }
 
     @GetMapping("/getUserByStudentNo")
-    public Result getUserByStudentNo(@RequestParam("studentNo") String studentNo) {
+    public Result getUserByStudentNo(@AuthenticationPrincipal UserPrincipal principal,
+                                     @RequestParam("studentNo") String studentNo) {
+        String role = principal.getRole();
+        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
+        if (!isAdmin && !principal.getStudentNo().equals(studentNo)) {
+            throw BusinessException.forbidden("FORBIDDEN");
+        }
+
         Optional<UserDTO> userOpt = userService.getUserByStudentNo(studentNo);
         return userOpt.map(dto -> Result.success(UserVO.fromDTO(dto)))
                 .orElseGet(() -> Result.error("User not found"));
