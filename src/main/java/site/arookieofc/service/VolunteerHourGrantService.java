@@ -2,18 +2,23 @@ package site.arookieofc.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import site.arookieofc.dao.entity.Activity;
 import site.arookieofc.dao.entity.PersonalHourRequest;
 import site.arookieofc.dao.entity.User;
+import site.arookieofc.dao.entity.VolunteerHourGrantRecord;
 import site.arookieofc.dao.mapper.ActivityMapper;
 import site.arookieofc.dao.mapper.PersonalHourRequestMapper;
 import site.arookieofc.dao.mapper.UserMapper;
+import site.arookieofc.dao.mapper.VolunteerHourGrantRecordMapper;
 import site.arookieofc.service.BO.ActivityStatus;
 
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * 志愿时长发放服务
@@ -30,6 +35,7 @@ public class VolunteerHourGrantService {
     private final UserMapper userMapper;
     private final ActivityMapper activityMapper;
     private final PersonalHourRequestMapper personalHourRequestMapper;
+    private final VolunteerHourGrantRecordMapper volunteerHourGrantRecordMapper;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     /**
@@ -65,11 +71,29 @@ public class VolunteerHourGrantService {
 
         Double before = user.getTotalHours() != null ? user.getTotalHours() : 0.0;
 
+        VolunteerHourGrantRecord record = VolunteerHourGrantRecord.builder()
+                .id(UUID.randomUUID().toString())
+                .studentNo(studentNo)
+                .sourceType(sourceType)
+                .sourceId(sourceId)
+                .sourceName(sourceName)
+                .duration(duration)
+                .grantedAt(LocalDateTime.now(ZONE))
+                .build();
+
+        try {
+            volunteerHourGrantRecordMapper.insert(record);
+        } catch (DuplicateKeyException e) {
+            log.warn("Duplicate hour grant skipped: student={}, sourceType={}, sourceId={}",
+                    studentNo, sourceType, sourceId);
+            return false;
+        }
+
         // 原子递增，避免并发下读-改-写覆盖
         int updated = userMapper.incrementTotalHours(studentNo, duration);
         if (updated == 0) {
             log.error("Failed to increment total hours for student: {}", studentNo);
-            return false;
+            throw new IllegalStateException("Failed to increment total hours for student: " + studentNo);
         }
 
         Double after = before + duration;

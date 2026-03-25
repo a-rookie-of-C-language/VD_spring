@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.VolunteerHourGrantRecordMapper">
+
+    <resultMap id="VolunteerHourGrantRecordResultMap" type="site.arookieofc.dao.entity.VolunteerHourGrantRecord">
+        <id column="id" property="id"/>
+        <result column="student_no" property="studentNo"/>
+        <result column="source_type" property="sourceType"/>
+        <result column="source_id" property="sourceId"/>
+        <result column="source_name" property="sourceName"/>
+        <result column="duration" property="duration"/>
+        <result column="granted_at" property="grantedAt"/>
+        <result column="operator" property="operator"/>
+        <result column="remark" property="remark"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="site.arookieofc.dao.entity.VolunteerHourGrantRecord">
+        INSERT INTO volunteer_hour_grant_records
+        (id, student_no, source_type, source_id, source_name, duration, granted_at, operator, remark)
+        VALUES
+        (#{id}, #{studentNo}, #{sourceType}, #{sourceId}, #{sourceName}, #{duration}, #{grantedAt}, #{operator}, #{remark})
+    </insert>
+
+    <select id="getByUniqueKey" resultMap="VolunteerHourGrantRecordResultMap">
+        SELECT id, student_no, source_type, source_id, source_name, duration, granted_at, operator, remark
+        FROM volunteer_hour_grant_records
+        WHERE student_no = #{studentNo}
+          AND source_type = #{sourceType}
+          AND source_id = #{sourceId}
+        LIMIT 1
+    </select>
+
+</mapper>
