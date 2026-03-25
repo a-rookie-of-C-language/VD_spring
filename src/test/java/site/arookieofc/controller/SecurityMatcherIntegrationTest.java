@@ -184,7 +184,8 @@ class SecurityMatcherIntegrationTest {
 
         mockMvc.perform(delete("/activities/attachment").param("filePath", "attachments/demo.txt")
                         .with(user("admin").roles("ADMIN")))
-                .andExpect(status().isOk());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value(404));
     }
 
     @Test
@@ -196,7 +197,7 @@ class SecurityMatcherIntegrationTest {
                         .param("name", "Test Activity")
                         .param("type", "COMMUNITY_SERVICE")
                         .with(authentication(new UserPrincipal("user1", "user", "User One"))))
-                .andExpect(status().isOk())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(403));
 
         ActivityDTO created = ActivityDTO.builder()
@@ -226,7 +227,7 @@ class SecurityMatcherIntegrationTest {
 
         mockMvc.perform(delete("/activities/a1")
                         .with(authentication(new UserPrincipal("other", "functionary", "Other"))))
-                .andExpect(status().isOk())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(403));
 
         mockMvc.perform(delete("/activities/a1")

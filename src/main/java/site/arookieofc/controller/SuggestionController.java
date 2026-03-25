@@ -8,6 +8,7 @@ import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.Result;
 import site.arookieofc.controller.VO.SuggestionVO;
 import site.arookieofc.dao.entity.Suggestion.SuggestionStatus;
+import site.arookieofc.security.AuthorizationGuards;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.SuggestionService;
 import site.arookieofc.service.dto.SuggestionDTO;
@@ -29,11 +30,11 @@ public class SuggestionController {
     public Result createSuggestion(@AuthenticationPrincipal UserPrincipal principal,
                                     @RequestBody CreateSuggestionRequest request) {
         if (request.getTitle() == null || request.getTitle().trim().isEmpty()) {
-            return Result.of(400, "Title is required", null);
+            throw BusinessException.badRequest("Title is required");
         }
 
         if (request.getContent() == null || request.getContent().trim().isEmpty()) {
-            return Result.of(400, "Content is required", null);
+            throw BusinessException.badRequest("Content is required");
         }
 
         SuggestionDTO dto = suggestionService.createSuggestion(
@@ -70,17 +71,14 @@ public class SuggestionController {
                                      @RequestParam(value = "page", required = false, defaultValue = "1") int page,
                                      @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize,
                                      @RequestParam(value = "status", required = false) String statusStr) {
-        String role = principal.getRole();
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireAdmin(principal);
 
         SuggestionStatus status = null;
         if (statusStr != null && !statusStr.trim().isEmpty()) {
             try {
                 status = SuggestionStatus.valueOf(statusStr.toUpperCase());
             } catch (IllegalArgumentException e) {
-                return Result.of(400, "Invalid status value. Use PENDING or REPLIED", null);
+                throw BusinessException.badRequest("Invalid status value. Use PENDING or REPLIED");
             }
         }
 
@@ -102,13 +100,10 @@ public class SuggestionController {
     public Result replySuggestion(@AuthenticationPrincipal UserPrincipal principal,
                                   @PathVariable("id") String id,
                                   @RequestBody ReplySuggestionRequest request) {
-        String role = principal.getRole();
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireAdmin(principal);
 
         if (request.getReplyContent() == null || request.getReplyContent().trim().isEmpty()) {
-            return Result.of(400, "Reply content is required", null);
+            throw BusinessException.badRequest("Reply content is required");
         }
 
         SuggestionDTO dto = suggestionService.replySuggestion(id, request.getReplyContent());

@@ -4,17 +4,23 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import java.util.List;
+import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.*;
 import site.arookieofc.security.UserPrincipal;
+import site.arookieofc.service.BusinessOperationLogService;
+import site.arookieofc.service.monitor.DeveloperMonitorService;
 import site.arookieofc.service.MonitoringService;
 
 @RestController
-@RequestMapping("/monitoring")
+@RequestMapping({"/monitoring", "/api/monitoring"})
 @RequiredArgsConstructor
 @Slf4j
 public class MonitoringController {
 
     private final MonitoringService monitoringService;
+    private final DeveloperMonitorService developerMonitorService;
+    private final BusinessOperationLogService businessOperationLogService;
 
     @GetMapping("/dashboard")
     public Result getDashboard(
@@ -22,7 +28,7 @@ public class MonitoringController {
             @RequestParam(value = "timeRange", required = false, defaultValue = "monthly") String timeRange) {
 
         if (!isValidTimeRange(timeRange)) {
-            return Result.of(400, "Invalid timeRange parameter. Valid values: daily, weekly, monthly, yearly", null);
+            throw BusinessException.badRequest("Invalid timeRange parameter. Valid values: daily, weekly, monthly, yearly");
         }
 
         MonitoringDashboardVO data = monitoringService.getDashboardData(timeRange);
@@ -73,5 +79,29 @@ public class MonitoringController {
         UserStatPageVO userStats = monitoringService.getUserStats(
                 college, grade, clazz, sortField, sortOrder, page, pageSize);
         return Result.success(userStats);
+    }
+
+    @GetMapping("/logs")
+    public Result getLogs(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(value = "size", required = false, defaultValue = "50") Integer size,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        List<MonitoringLogVO> logs = monitoringService.getRecentLogs(size, keyword);
+        return Result.success(logs);
+    }
+
+    @GetMapping("/developer-metrics")
+    public Result getDeveloperMetrics(@AuthenticationPrincipal UserPrincipal principal) {
+        DeveloperMetricsVO metrics = developerMonitorService.snapshot();
+        return Result.success(metrics);
+    }
+
+    @GetMapping("/business-logs")
+    public Result getBusinessLogs(
+            @AuthenticationPrincipal UserPrincipal principal,
+            @RequestParam(value = "size", required = false, defaultValue = "50") Integer size,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        List<BusinessOperationLogVO> logs = businessOperationLogService.queryRecent(size, keyword);
+        return Result.success(logs);
     }
 }

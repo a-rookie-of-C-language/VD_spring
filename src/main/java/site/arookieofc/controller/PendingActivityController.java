@@ -9,6 +9,7 @@ import site.arookieofc.common.audit.BusinessOperation;
 import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.PendingActivityQueryVO;
 import site.arookieofc.controller.VO.Result;
+import site.arookieofc.security.AuthorizationGuards;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.BatchImportService;
 import site.arookieofc.service.PendingActivityService;
@@ -49,7 +50,7 @@ public class PendingActivityController {
         String role = principal != null ? principal.getRole() : null;
         String studentNo = principal != null ? principal.getStudentNo() : null;
 
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
+        if (!AuthorizationGuards.isAdmin(principal)) {
             submittedBy = studentNo;
         }
 
@@ -83,7 +84,7 @@ public class PendingActivityController {
         String role = principal != null ? principal.getRole() : null;
         String studentNo = principal != null ? principal.getStudentNo() : null;
 
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
+        if (!AuthorizationGuards.isAdmin(principal)) {
             submittedBy = studentNo;
         }
 
@@ -107,11 +108,7 @@ public class PendingActivityController {
     public Result getById(@AuthenticationPrincipal UserPrincipal principal,
                           @PathVariable("id") String id) {
         PendingActivityDTO dto = pendingActivityService.getPendingActivityById(id);
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
-        if (!isAdmin && !principal.getStudentNo().equals(dto.getSubmittedBy())) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireSelfOrAdmin(principal, dto.getSubmittedBy());
         return Result.success(dto);
     }
 
@@ -122,10 +119,7 @@ public class PendingActivityController {
     @BusinessOperation(action = "审批活动发布", targetType = "pending-activity", targetIdParam = "id", detail = "管理员审批通过活动发布")
     public Result approve(@AuthenticationPrincipal UserPrincipal principal,
                          @PathVariable("id") String id) {
-        String role = principal.getRole();
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireAdmin(principal);
 
         String activityId = pendingActivityService.approvePendingActivity(id, principal.getStudentNo());
         Map<String, Object> result = new HashMap<>();
@@ -141,10 +135,7 @@ public class PendingActivityController {
     public Result reject(@AuthenticationPrincipal UserPrincipal principal,
                         @PathVariable("id") String id,
                         @RequestParam(value = "reason", required = false) String reason) {
-        String role = principal.getRole();
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireAdmin(principal);
 
         pendingActivityService.rejectPendingActivity(id, reason, principal.getStudentNo());
         return Result.success();
@@ -157,12 +148,7 @@ public class PendingActivityController {
     public Result delete(@AuthenticationPrincipal UserPrincipal principal,
                          @PathVariable("id") String id) {
         PendingActivityDTO dto = pendingActivityService.getPendingActivityById(id);
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
-
-        if (!isAdmin && !principal.getStudentNo().equals(dto.getSubmittedBy())) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireSelfOrAdmin(principal, dto.getSubmittedBy());
         if (dto.getStatus() != null && dto.getStatus() != site.arookieofc.service.BO.ActivityStatus.UnderReview) {
             throw BusinessException.badRequest("CANNOT_DELETE_PROCESSED_PENDING_ACTIVITY");
         }
@@ -188,17 +174,16 @@ public class PendingActivityController {
     public Result batchImport(@AuthenticationPrincipal UserPrincipal principal,
                               @RequestParam("file") MultipartFile file) {
         if (file == null || file.isEmpty()) {
-            return Result.error("请上传Excel文件");
+            throw BusinessException.badRequest("请上传Excel文件");
         }
 
         String originalFilename = file.getOriginalFilename();
         if (originalFilename == null ||
             (!originalFilename.toLowerCase().endsWith(".xlsx") && !originalFilename.toLowerCase().endsWith(".xls"))) {
-            return Result.error("请上传.xlsx或.xls格式的Excel文件");
+            throw BusinessException.badRequest("请上传.xlsx或.xls格式的Excel文件");
         }
 
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
+        boolean isAdmin = AuthorizationGuards.isAdmin(principal);
 
         BatchImportResultDTO result = batchImportService.batchImport(file, principal.getStudentNo(), isAdmin);
 
@@ -230,8 +215,7 @@ public class PendingActivityController {
                                           @RequestParam(required = false) String submittedBy,
                                           @RequestParam(defaultValue = "1") int page,
                                           @RequestParam(defaultValue = "10") int pageSize) {
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
+        boolean isAdmin = AuthorizationGuards.isAdmin(principal);
 
         // 非管理员只能查看自己提交的
         if (!isAdmin) {
@@ -258,8 +242,7 @@ public class PendingActivityController {
                                         @PathVariable String batchId) {
         var dto = batchImportService.getPendingBatchImport(batchId);
 
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
+        boolean isAdmin = AuthorizationGuards.isAdmin(principal);
 
         // 非管理员只能查看自己提交的
         if (!isAdmin && !principal.getStudentNo().equals(dto.getSubmittedBy())) {
@@ -276,10 +259,7 @@ public class PendingActivityController {
     @BusinessOperation(action = "审批批量导入", targetType = "batch-import", targetIdParam = "batchId", detail = "管理员审批通过批量导入")
     public Result approveBatchImport(@AuthenticationPrincipal UserPrincipal principal,
                                      @PathVariable String batchId) {
-        String role = principal.getRole();
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireAdmin(principal);
 
         BatchImportResultDTO result = batchImportService.approveBatchImport(batchId, principal.getStudentNo());
 
@@ -308,10 +288,7 @@ public class PendingActivityController {
     public Result rejectBatchImport(@AuthenticationPrincipal UserPrincipal principal,
                                     @PathVariable String batchId,
                                     @RequestParam(required = false) String reason) {
-        String role = principal.getRole();
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireAdmin(principal);
 
         batchImportService.rejectBatchImport(batchId, reason, principal.getStudentNo());
         return Result.success("已拒绝");
@@ -325,8 +302,7 @@ public class PendingActivityController {
                                            @PathVariable String batchId) {
         var dto = batchImportService.getPendingBatchImport(batchId);
 
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
+        boolean isAdmin = AuthorizationGuards.isAdmin(principal);
 
         // 非管理员只能删除自己提交的且状态为PENDING的
         if (!isAdmin) {

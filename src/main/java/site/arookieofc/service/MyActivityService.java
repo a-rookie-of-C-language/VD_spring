@@ -8,11 +8,14 @@ import site.arookieofc.controller.VO.MyActivityPageVO;
 import site.arookieofc.dao.entity.PendingBatchImport;
 import site.arookieofc.service.dto.ActivityDTO;
 import site.arookieofc.service.dto.PendingActivityDTO;
+import site.arookieofc.service.dto.UserDTO;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -23,6 +26,7 @@ public class MyActivityService {
     private final ActivityService activityService;
     private final PendingActivityService pendingActivityService;
     private final BatchImportService batchImportService;
+    private final UserService userService;
 
     public MyActivityPageVO getMyActivities(String studentNo, int page, int pageSize) {
         List<MyActivityItemVO> allItems = new ArrayList<>();
@@ -67,5 +71,22 @@ public class MyActivityService {
                 .page(page)
                 .pageSize(pageSize)
                 .build();
+    }
+
+    public Map<String, Object> getMyStatus(String studentNo) {
+        List<ActivityDTO> participatedActivities = activityService.getActivitiesByStudentNo(studentNo);
+        double totalDuration = userService.getUserByStudentNo(studentNo)
+                .map(UserDTO::getTotalHours)
+                .orElse(0.0);
+
+        List<ActivityVO> activityList = participatedActivities.stream()
+                .map(ActivityVO::fromDTO)
+                .collect(Collectors.toList());
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("totalDuration", totalDuration);
+        data.put("totalActivities", participatedActivities.size());
+        data.put("activities", activityList);
+        return data;
     }
 }

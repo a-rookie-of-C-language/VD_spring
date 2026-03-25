@@ -6,7 +6,9 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import site.arookieofc.common.audit.BusinessOperation;
+import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.*;
+import site.arookieofc.security.AuthorizationGuards;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.ActivityService;
 import site.arookieofc.service.BatchImportService;
@@ -64,7 +66,7 @@ public class ActivityController {
 
         String role = principal != null ? principal.getRole() : null;
         String studentNo = principal != null ? principal.getStudentNo() : null;
-        boolean useAll = status != null || (("admin".equals(role) || "superAdmin".equals(role)))
+        boolean useAll = status != null || AuthorizationGuards.isAdmin(principal)
                 || ("functionary".equals(role) && functionary != null && functionary.equals(studentNo));
 
         int total = useAll ? activityService.countActivitiesAll(type, status, functionary, name, sf, st, isFull)
@@ -93,9 +95,9 @@ public class ActivityController {
     public Result create(@AuthenticationPrincipal UserPrincipal principal,
                          @ModelAttribute ActivityDTO dto) {
         String role = principal.getRole();
-        boolean canCreate = "functionary".equals(role) || "admin".equals(role) || "superAdmin".equals(role);
+        boolean canCreate = "functionary".equals(role) || AuthorizationGuards.isAdmin(principal);
         if (!canCreate) {
-            throw site.arookieofc.common.exception.BusinessException.forbidden("FORBIDDEN");
+            throw BusinessException.forbidden("FORBIDDEN");
         }
         dto.setFunctionary(principal.getStudentNo());
         ActivityDTO created = activityService.createActivity(dto);
@@ -121,11 +123,7 @@ public class ActivityController {
     public Result delete(@AuthenticationPrincipal UserPrincipal principal,
                          @PathVariable("id") String id) {
         ActivityDTO dto = activityService.getActivityById(id);
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
-        if (!isAdmin && !principal.getStudentNo().equals(dto.getFunctionary())) {
-            throw site.arookieofc.common.exception.BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireSelfOrAdmin(principal, dto.getFunctionary());
         activityService.deleteActivity(id);
         return Result.success();
     }
@@ -174,8 +172,7 @@ public class ActivityController {
     @BusinessOperation(action = "导入活动", targetType = "activity", detail = "负责人导入活动")
     public Result importActivity(@AuthenticationPrincipal UserPrincipal principal,
                                  @ModelAttribute ActivityImportDTO dto) {
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
+        boolean isAdmin = AuthorizationGuards.isAdmin(principal);
 
         String activityId = pendingActivityService
                 .importActivity(dto, principal.getStudentNo(), isAdmin);
@@ -187,28 +184,7 @@ public class ActivityController {
 
     @GetMapping("/MyStatus")
     public Result getMyStatus(@AuthenticationPrincipal UserPrincipal principal) {
-        // Authentication handled by Spring Security
-        String studentNo = principal.getStudentNo();
-
-        List<ActivityDTO> participatedActivities = activityService.getActivitiesByStudentNo(studentNo);
-
-        double totalDuration = userService.getUserByStudentNo(studentNo)
-                .map(UserDTO::getTotalHours)
-                .orElse(0.0);
-
-        // Count total activities
-        int totalActivities = participatedActivities.size();
-
-        // Convert to VO
-        List<ActivityVO> activityList = participatedActivities.stream()
-                .map(ActivityVO::fromDTO)
-                .collect(Collectors.toList());
-
-        Map<String, Object> data = new HashMap<>();
-        data.put("totalDuration", totalDuration);
-        data.put("totalActivities", totalActivities);
-        data.put("activities", activityList);
-
+        Map<String, Object> data = myActivityService.getMyStatus(principal.getStudentNo());
         return Result.success(data);
     }
 
@@ -219,19 +195,15 @@ public class ActivityController {
     @PostMapping("/upload/attachment")
     public Result uploadAttachment(@RequestParam("file") MultipartFile file,
                                    @RequestParam(required = false) String description) {
+        if (file.isEmpty()) {
+            throw BusinessException.badRequest("文件不能为空");
+        }
+
         try {
-            if (file.isEmpty()) {
-                return Result.error("文件不能为空");
-            }
-
-            // 上传文件
             String filePath = fileUploadService.uploadAttachment(file);
-
-            // 获取文件信息
             String originalFilename = file.getOriginalFilename();
             String fileType = FilenameUtils.getExtension(originalFilename != null ? originalFilename : "");
 
-            // 构造返回值
             AttachmentVO attachmentVO = AttachmentVO.builder()
                     .fileName(originalFilename)
                     .filePath(filePath)
@@ -242,11 +214,10 @@ public class ActivityController {
 
             return Result.success(attachmentVO);
         } catch (IllegalArgumentException e) {
-            log.error("文件验证失败: {}", e.getMessage());
-            return Result.error(e.getMessage());
+            throw BusinessException.badRequest(e.getMessage());
         } catch (Exception e) {
             log.error("文件上传失败", e);
-            return Result.error("文件上传失败: " + e.getMessage());
+            throw new RuntimeException("文件上传失败: " + e.getMessage(), e);
         }
     }
 
@@ -257,14 +228,15 @@ public class ActivityController {
     public Result deleteAttachment(@RequestParam("filePath") String filePath) {
         try {
             boolean deleted = fileUploadService.deleteAttachment(filePath);
-            if (deleted) {
-                return Result.success("附件删除成功");
-            } else {
-                return Result.error("附件删除失败或文件不存在");
+            if (!deleted) {
+                throw BusinessException.notFound("附件删除失败或文件不存在");
             }
+            return Result.success("附件删除成功");
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("删除附件失败", e);
-            return Result.error("删除附件失败: " + e.getMessage());
+            throw new RuntimeException("删除附件失败: " + e.getMessage(), e);
         }
     }
 
@@ -275,14 +247,15 @@ public class ActivityController {
     public Result getAttachmentInfo(@RequestParam("filePath") String filePath) {
         try {
             Map<String, Object> info = fileUploadService.getFileInfo(filePath);
-            if (info != null) {
-                return Result.success(info);
-            } else {
-                return Result.of(404, "附件不存在", null);
+            if (info == null) {
+                throw BusinessException.notFound("附件不存在");
             }
+            return Result.success(info);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             log.error("获取附件信息失败", e);
-            return Result.error("获取附件信息失败: " + e.getMessage());
+            throw new RuntimeException("获取附件信息失败: " + e.getMessage(), e);
         }
     }
 }

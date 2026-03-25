@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.*;
 import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.Result;
 import site.arookieofc.controller.VO.UserVO;
+import site.arookieofc.security.AuthorizationGuards;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.UserService;
 import site.arookieofc.service.dto.UserDTO;
@@ -30,35 +31,31 @@ public class UserController {
     public Result getUser(@AuthenticationPrincipal UserPrincipal principal) {
         Optional<UserDTO> userOpt = userService.getUserByStudentNo(principal.getStudentNo());
         return userOpt.map(dto -> Result.success(UserVO.fromDTO(dto)))
-                .orElseGet(() -> Result.error("用户不存在"));
+                .orElseThrow(() -> BusinessException.notFound("用户不存在"));
     }
 
     @GetMapping("/verifyToken")
     public Result verifyToken(@RequestHeader(value = "Authorization", required = false) String authHeader) {
         if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            return Result.of(401, "Token不能为空", null);
+            throw new BusinessException(org.springframework.http.HttpStatus.UNAUTHORIZED, "Token不能为空");
         }
         String token = authHeader.substring(7);
         TokenParseResult result = jwtUtils.parseTokenSafe(token);
         if (result.isSuccess()) {
             return Result.success(null, result.getMessage());
         } else {
-            return Result.of(401, result.getMessage(), null);
+            throw new BusinessException(org.springframework.http.HttpStatus.UNAUTHORIZED, result.getMessage());
         }
     }
 
     @GetMapping("/getUserByStudentNo")
     public Result getUserByStudentNo(@AuthenticationPrincipal UserPrincipal principal,
                                      @RequestParam("studentNo") String studentNo) {
-        String role = principal.getRole();
-        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
-        if (!isAdmin && !principal.getStudentNo().equals(studentNo)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireSelfOrAdmin(principal, studentNo);
 
         Optional<UserDTO> userOpt = userService.getUserByStudentNo(studentNo);
         return userOpt.map(dto -> Result.success(UserVO.fromDTO(dto)))
-                .orElseGet(() -> Result.error("User not found"));
+                .orElseThrow(() -> BusinessException.notFound("User not found"));
     }
 
     @PostMapping("/login")
@@ -80,7 +77,7 @@ public class UserController {
 
             return Result.success(data);
         } else {
-            return Result.error("Invalid username or password");
+            throw new BusinessException(org.springframework.http.HttpStatus.UNAUTHORIZED, "Invalid username or password");
         }
     }
 

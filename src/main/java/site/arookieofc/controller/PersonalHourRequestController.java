@@ -5,8 +5,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import site.arookieofc.common.audit.BusinessOperation;
 import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.Result;
+import site.arookieofc.security.AuthorizationGuards;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.service.PersonalHourRequestService;
@@ -26,6 +28,7 @@ public class PersonalHourRequestController {
     private final PersonalHourRequestService requestService;
 
     @PostMapping(value = "/request_hours", consumes = {"multipart/form-data"})
+    @BusinessOperation(action = "提交时长申请", targetType = "hour-request", detail = "用户提交个人时长申请")
     public Result submitRequest(@AuthenticationPrincipal UserPrincipal principal,
                                 @RequestParam("name") String name,
                                 @RequestParam("functionary") String functionary,
@@ -59,10 +62,7 @@ public class PersonalHourRequestController {
     public Result getPendingRequests(@AuthenticationPrincipal UserPrincipal principal,
                                      @RequestParam(value = "page", required = false, defaultValue = "1") int page,
                                      @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize) {
-        String role = principal.getRole();
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireAdmin(principal);
 
         int total = requestService.countUnderViewRequests();
         List<PersonalHourRequestDTO> items = requestService.listPendingRequests(page, pageSize);
@@ -77,17 +77,15 @@ public class PersonalHourRequestController {
     }
 
     @PostMapping("/review_request/{id}")
+    @BusinessOperation(action = "审核时长申请", targetType = "hour-request", targetIdParam = "id", detail = "管理员审核个人时长申请")
     public Result reviewRequest(@AuthenticationPrincipal UserPrincipal principal,
                                 @PathVariable("id") String id,
                                 @RequestParam("approved") boolean approved,
                                 @RequestParam(value = "reason", required = false) String reason) {
-        String role = principal.getRole();
-        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
+        AuthorizationGuards.requireAdmin(principal);
 
         if (!approved && (reason == null || reason.trim().isEmpty())) {
-            return Result.of(400, "REASON_REQUIRED", null);
+            throw BusinessException.badRequest("REASON_REQUIRED");
         }
 
         PersonalHourRequestDTO reviewed = requestService.reviewRequest(
@@ -122,13 +120,7 @@ public class PersonalHourRequestController {
     public Result getRequestById(@AuthenticationPrincipal UserPrincipal principal,
                                  @PathVariable("id") String id) {
         PersonalHourRequestDTO dto = requestService.getRequestById(id);
-
-        String role = principal.getRole();
-        if (!dto.getApplicantStudentNo().equals(principal.getStudentNo())
-                && !"admin".equals(role) && !"superAdmin".equals(role)) {
-            throw BusinessException.forbidden("FORBIDDEN");
-        }
-
+        AuthorizationGuards.requireSelfOrAdmin(principal, dto.getApplicantStudentNo());
         return Result.success(dto);
     }
 
