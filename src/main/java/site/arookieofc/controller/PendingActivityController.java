@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import site.arookieofc.common.audit.BusinessOperation;
 import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.PendingActivityQueryVO;
 import site.arookieofc.controller.VO.Result;
@@ -114,8 +115,14 @@ public class PendingActivityController {
      * Approve pending activity (admin only)
      */
     @PostMapping("/{id}/approve")
+    @BusinessOperation(action = "审批活动发布", targetType = "pending-activity", targetIdParam = "id", detail = "管理员审批通过活动发布")
     public Result approve(@AuthenticationPrincipal UserPrincipal principal,
                          @PathVariable("id") String id) {
+        String role = principal.getRole();
+        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
+            throw BusinessException.forbidden("FORBIDDEN");
+        }
+
         String activityId = pendingActivityService.approvePendingActivity(id, principal.getStudentNo());
         Map<String, Object> result = new HashMap<>();
         result.put("activityId", activityId);
@@ -126,9 +133,15 @@ public class PendingActivityController {
      * Reject pending activity (admin only)
      */
     @PostMapping("/{id}/reject")
+    @BusinessOperation(action = "驳回活动发布", targetType = "pending-activity", targetIdParam = "id", detail = "管理员驳回活动发布")
     public Result reject(@AuthenticationPrincipal UserPrincipal principal,
                         @PathVariable("id") String id,
                         @RequestParam(value = "reason", required = false) String reason) {
+        String role = principal.getRole();
+        if (!"admin".equals(role) && !"superAdmin".equals(role)) {
+            throw BusinessException.forbidden("FORBIDDEN");
+        }
+
         pendingActivityService.rejectPendingActivity(id, reason, principal.getStudentNo());
         return Result.success();
     }
@@ -137,7 +150,16 @@ public class PendingActivityController {
      * Delete pending activity (submitter or admin)
      */
     @DeleteMapping("/{id}")
-    public Result delete(@PathVariable("id") String id) {
+    public Result delete(@AuthenticationPrincipal UserPrincipal principal,
+                         @PathVariable("id") String id) {
+        PendingActivityDTO dto = pendingActivityService.getPendingActivityById(id);
+        String role = principal.getRole();
+        boolean isAdmin = "admin".equals(role) || "superAdmin".equals(role);
+
+        if (!isAdmin && !principal.getStudentNo().equals(dto.getSubmittedBy())) {
+            throw BusinessException.forbidden("FORBIDDEN");
+        }
+
         pendingActivityService.deletePendingActivity(id);
         return Result.success();
     }
@@ -244,6 +266,7 @@ public class PendingActivityController {
      * 审核通过批量导入
      */
     @PostMapping("/batch-import/{batchId}/approve")
+    @BusinessOperation(action = "审批批量导入", targetType = "batch-import", targetIdParam = "batchId", detail = "管理员审批通过批量导入")
     public Result approveBatchImport(@AuthenticationPrincipal UserPrincipal principal,
                                      @PathVariable String batchId) {
         String role = principal.getRole();
@@ -274,6 +297,7 @@ public class PendingActivityController {
      * 拒绝批量导入
      */
     @PostMapping("/batch-import/{batchId}/reject")
+    @BusinessOperation(action = "驳回批量导入", targetType = "batch-import", targetIdParam = "batchId", detail = "管理员驳回批量导入")
     public Result rejectBatchImport(@AuthenticationPrincipal UserPrincipal principal,
                                     @PathVariable String batchId,
                                     @RequestParam(required = false) String reason) {

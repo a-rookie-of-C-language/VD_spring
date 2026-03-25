@@ -412,6 +412,13 @@ public class BatchImportService {
             throw BusinessException.badRequest("ALREADY_PROCESSED");
         }
 
+        LocalDateTime reviewedAt = LocalDateTime.now();
+        int claimed = pendingBatchImportMapper.updateStatusIfCurrent(
+                batchId, "PENDING", "APPROVED", reviewedAt, reviewerStudentNo, null);
+        if (claimed == 0) {
+            throw BusinessException.badRequest("ALREADY_PROCESSED");
+        }
+
         List<PendingBatchImportRecord> records = pendingBatchImportMapper.getRecordsByBatchId(batchId);
         if (records.isEmpty()) {
             throw new IllegalArgumentException("批次记录为空");
@@ -523,9 +530,6 @@ public class BatchImportService {
             }
         }
 
-        // 更新审核状态
-        pendingBatchImportMapper.updateStatus(batchId, "APPROVED", LocalDateTime.now(), reviewerStudentNo, null);
-
         log.info("Approved batch import: batchId={}, reviewer={}", batchId, reviewerStudentNo);
 
         return BatchImportResultDTO.builder()
@@ -554,7 +558,11 @@ public class BatchImportService {
             throw BusinessException.badRequest("ALREADY_PROCESSED");
         }
 
-        pendingBatchImportMapper.updateStatus(batchId, "REJECTED", LocalDateTime.now(), reviewerStudentNo, reason);
+        int rows = pendingBatchImportMapper.updateStatusIfCurrent(
+                batchId, "PENDING", "REJECTED", LocalDateTime.now(), reviewerStudentNo, reason);
+        if (rows == 0) {
+            throw BusinessException.badRequest("ALREADY_PROCESSED");
+        }
         log.info("Rejected batch import: batchId={}, reason={}, reviewer={}", batchId, reason, reviewerStudentNo);
     }
 

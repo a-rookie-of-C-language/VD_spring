@@ -74,6 +74,16 @@
         WHERE id = #{id}
     </update>
 
+    <update id="updateStatusIfCurrent">
+        UPDATE pending_batch_imports
+        SET status = #{status},
+            reviewed_at = #{reviewedAt},
+            reviewed_by = #{reviewedBy},
+            rejected_reason = #{rejectedReason}
+        WHERE id = #{id}
+          AND status = #{currentStatus}
+    </update>
+
     <delete id="delete">
         DELETE FROM pending_batch_imports WHERE id = #{id}
     </delete>

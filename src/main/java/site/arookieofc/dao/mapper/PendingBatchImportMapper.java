@@ -27,6 +27,13 @@ public interface PendingBatchImportMapper {
                      @Param("reviewedBy") String reviewedBy,
                      @Param("rejectedReason") String rejectedReason);
 
+    int updateStatusIfCurrent(@Param("id") String id,
+                              @Param("currentStatus") String currentStatus,
+                              @Param("status") String status,
+                              @Param("reviewedAt") java.time.LocalDateTime reviewedAt,
+                              @Param("reviewedBy") String reviewedBy,
+                              @Param("rejectedReason") String rejectedReason);
+
     int delete(@Param("id") String id);
 
     // 分页查询
