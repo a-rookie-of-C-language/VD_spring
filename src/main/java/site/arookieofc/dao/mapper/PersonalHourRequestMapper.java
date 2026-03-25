@@ -28,6 +28,13 @@ public interface PersonalHourRequestMapper {
                      @Param("reviewedAt") LocalDateTime reviewedAt,
                      @Param("reviewedBy") String reviewedBy);
 
+    int updateStatusIfCurrent(@Param("id") String id,
+                              @Param("currentStatus") ActivityStatus currentStatus,
+                              @Param("status") ActivityStatus status,
+                              @Param("rejectedReason") String rejectedReason,
+                              @Param("reviewedAt") LocalDateTime reviewedAt,
+                              @Param("reviewedBy") String reviewedBy);
+
     int delete(@Param("id") String id);
 
     List<String> selectAttachmentsByRequestId(@Param("requestId") String requestId);

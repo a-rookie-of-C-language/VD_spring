@@ -150,6 +150,16 @@
         WHERE id = #{id}
     </update>
 
+    <update id="updateStatusIfCurrent">
+        UPDATE activities SET
+            status = #{status, jdbcType=VARCHAR},
+            rejected_reason = #{rejectedReason, jdbcType=VARCHAR},
+            reviewed_at = #{reviewedAt},
+            reviewed_by = #{reviewedBy}
+        WHERE id = #{id}
+          AND status = #{currentStatus, jdbcType=VARCHAR}
+    </update>
+
     <update id="updateRejectedReason">
         UPDATE activities SET
             rejected_reason = #{reason, jdbcType=VARCHAR}

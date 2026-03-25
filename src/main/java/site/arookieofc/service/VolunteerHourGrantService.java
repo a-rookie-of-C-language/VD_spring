@@ -63,20 +63,20 @@ public class VolunteerHourGrantService {
             return false;
         }
 
-        // 计算新的总时长
-        double currentTotal = user.getTotalHours() != null ? user.getTotalHours() : 0.0;
-        double newTotal = currentTotal + duration;
+        Double before = user.getTotalHours() != null ? user.getTotalHours() : 0.0;
 
-        // 更新用户总时长
-        int updated = userMapper.updateTotalHours(studentNo, newTotal);
+        // 原子递增，避免并发下读-改-写覆盖
+        int updated = userMapper.incrementTotalHours(studentNo, duration);
         if (updated == 0) {
-            log.error("Failed to update total hours for student: {}", studentNo);
+            log.error("Failed to increment total hours for student: {}", studentNo);
             return false;
         }
 
+        Double after = before + duration;
+
         // 记录日志
-        log.info("Hours granted successfully: student={}, duration={}, oldTotal={}, newTotal={}, source={}, id={}, name={}",
-                studentNo, duration, currentTotal, newTotal, sourceType, sourceId, sourceName);
+        log.info("Hours granted successfully: student={}, duration={}, before~={}, after~={}, source={}, id={}, name={}",
+                studentNo, duration, before, after, sourceType, sourceId, sourceName);
 
         return true;
     }

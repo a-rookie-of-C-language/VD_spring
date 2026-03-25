@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import site.arookieofc.common.audit.BusinessOperation;
 import site.arookieofc.controller.VO.*;
 import site.arookieofc.dao.entity.PendingBatchImport;
 import site.arookieofc.security.UserPrincipal;
@@ -18,7 +19,6 @@ import site.arookieofc.service.dto.ActivityDTO;
 import site.arookieofc.service.dto.ActivityImportDTO;
 import site.arookieofc.service.dto.UserDTO;
 import org.apache.commons.io.FilenameUtils;
-
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -91,6 +91,7 @@ public class ActivityController {
 
 
     @PostMapping(consumes = {"multipart/form-data"})
+    @BusinessOperation(action = "发布活动", targetType = "activity", detail = "负责人发布活动")
     public Result create(@ModelAttribute ActivityDTO dto) {
         ActivityDTO created = activityService.createActivity(dto);
         return Result.success(ActivityVO.fromDTO(created));
@@ -140,10 +141,12 @@ public class ActivityController {
     }
 
     @PostMapping("/{id}/review")
-    public Result review(@PathVariable("id") String id,
+    @BusinessOperation(action = "审核活动", targetType = "activity", targetIdParam = "id", detail = "管理员审核活动")
+    public Result review(@AuthenticationPrincipal UserPrincipal principal,
+                         @PathVariable("id") String id,
                          @RequestParam("approve") boolean approve,
                          @RequestParam(value = "reason", required = false) String reason) {
-        ActivityDTO dto = activityService.reviewActivity(id, approve, reason);
+        ActivityDTO dto = activityService.reviewActivity(id, approve, reason, principal.getStudentNo());
         return Result.success(ActivityVO.fromDTO(dto));
     }
 
@@ -236,6 +239,7 @@ public class ActivityController {
     }
 
     @PostMapping("/import")
+    @BusinessOperation(action = "导入活动", targetType = "activity", detail = "负责人导入活动")
     public Result importActivity(@AuthenticationPrincipal UserPrincipal principal,
                                  @ModelAttribute ActivityImportDTO dto) {
         String role = principal.getRole();

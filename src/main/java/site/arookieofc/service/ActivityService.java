@@ -288,15 +288,27 @@ public class ActivityService {
     }
 
     @Transactional
-    public ActivityDTO reviewActivity(String id, boolean approve, String reason) {
+    public ActivityDTO reviewActivity(String id, boolean approve, String reason, String reviewerStudentNo) {
         Activity a = activityMapper.getById(id);
         if (a == null) {
             throw BusinessException.notFound("NOT_FOUND");
         }
+        if (a.getStatus() != ActivityStatus.UnderReview) {
+            throw BusinessException.badRequest("ALREADY_REVIEWED");
+        }
+
+        LocalDateTime reviewedAt = LocalDateTime.now(ZONE);
         if (!approve) {
-            a.setStatus(ActivityStatus.FailReview);
-            a.setRejectedReason(reason);
-            activityMapper.update(a);
+            int rows = activityMapper.updateStatusIfCurrent(
+                    id,
+                    ActivityStatus.UnderReview,
+                    ActivityStatus.FailReview,
+                    reason,
+                    reviewedAt,
+                    reviewerStudentNo);
+            if (rows == 0) {
+                throw BusinessException.badRequest("ALREADY_REVIEWED");
+            }
             return getActivityDTO(id);
         }
         LocalDateTime now = LocalDateTime.now(ZONE);
@@ -308,10 +320,21 @@ public class ActivityService {
         if (now.isAfter(eet)) {
             throw BusinessException.badRequest("ENROLLMENT_PASSED");
         }
-        
+
         a.setRejectedReason(null);
+        a.setReviewedAt(reviewedAt);
+        a.setReviewedBy(reviewerStudentNo);
         refreshStatus(a);
-        activityMapper.update(a);
+        int rows = activityMapper.updateStatusIfCurrent(
+                id,
+                ActivityStatus.UnderReview,
+                a.getStatus(),
+                null,
+                reviewedAt,
+                reviewerStudentNo);
+        if (rows == 0) {
+            throw BusinessException.badRequest("ALREADY_REVIEWED");
+        }
         scheduleStatusMessages(a);
         return getActivityDTO(id);
     }

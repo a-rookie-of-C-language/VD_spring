@@ -26,6 +26,13 @@ public interface ActivityMapper {
 
     int updateStatus(@Param("id") String id, @Param("status") ActivityStatus status);
 
+    int updateStatusIfCurrent(@Param("id") String id,
+                              @Param("currentStatus") ActivityStatus currentStatus,
+                              @Param("status") ActivityStatus status,
+                              @Param("rejectedReason") String rejectedReason,
+                              @Param("reviewedAt") java.time.LocalDateTime reviewedAt,
+                              @Param("reviewedBy") String reviewedBy);
+
     int updateRejectedReason(@Param("id") String id, @Param("reason") String reason);
 
     int delete(@Param("id") String id);

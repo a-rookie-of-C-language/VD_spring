@@ -199,7 +199,16 @@ public class PersonalHourRequestService {
         String rejectedReason = approved ? null : reason;
         LocalDateTime reviewedAt = LocalDateTime.now(ZONE);
 
-        requestMapper.updateStatus(id, newStatus, rejectedReason, reviewedAt, reviewerStudentNo);
+        int rows = requestMapper.updateStatusIfCurrent(
+                id,
+                ActivityStatus.UnderReview,
+                newStatus,
+                rejectedReason,
+                reviewedAt,
+                reviewerStudentNo);
+        if (rows == 0) {
+            throw BusinessException.badRequest("ALREADY_REVIEWED");
+        }
 
         // If approved, add hours to user's total using unified grant service
         if (approved) {

@@ -112,6 +112,16 @@
         WHERE id = #{id}
     </update>
 
+    <update id="updateStatusIfCurrent">
+        UPDATE personal_hour_requests
+        SET status = #{status},
+            rejected_reason = #{rejectedReason},
+            reviewed_at = #{reviewedAt},
+            reviewed_by = #{reviewedBy}
+        WHERE id = #{id}
+          AND status = #{currentStatus}
+    </update>
+
     <delete id="delete">
         DELETE FROM personal_hour_requests WHERE id = #{id}
     </delete>

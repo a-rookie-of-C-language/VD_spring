@@ -33,6 +33,12 @@
         WHERE student_no = #{studentNo}
     </update>
 
+    <update id="incrementTotalHours">
+        UPDATE users
+        SET total_hours = COALESCE(total_hours, 0) + #{delta}
+        WHERE student_no = #{studentNo}
+    </update>
+
     <insert id="insertUser" parameterType="site.arookieofc.dao.entity.User">
         INSERT INTO users (student_no, username, password, role, total_hours, created_at, clazz, grade, college)
         VALUES (#{studentNo}, #{username}, #{password}, #{role}, #{totalHours}, #{createdAt}, #{clazz}, #{grade}, #{college})
