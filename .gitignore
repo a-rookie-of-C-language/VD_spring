@@ -26,4 +26,19 @@ application-local.yml
 
 # Test temp files
 temp_*.txt
+bundle/
+dist-bundle/
+
+
+# ---- local build/artifacts (added by assistant) ----
+/dist-bundle.zip
+/dist-bundle/
+/target/
+/VD/
+/.claude/
+*.zip
+*.tar
+*.dump
+*.log
+*.exe
 

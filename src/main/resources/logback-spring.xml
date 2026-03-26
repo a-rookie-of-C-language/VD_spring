@@ -1,0 +1,33 @@
+<configuration>
+    <springProperty scope="context" name="APP_NAME" source="app.logging.service-name" defaultValue="volunteer-duration"/>
+    <springProperty scope="context" name="APP_ENV" source="app.logging.environment" defaultValue="dev"/>
+    <springProperty scope="context" name="ELK_HOST" source="app.logging.elk.host" defaultValue="localhost"/>
+    <springProperty scope="context" name="ELK_PORT" source="app.logging.elk.port" defaultValue="5000"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <destination>${ELK_HOST}:${ELK_PORT}</destination>
+        <reconnectionDelay>10 seconds</reconnectionDelay>
+        <writeBufferSize>8192</writeBufferSize>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <customFields>{"service":"${APP_NAME}","environment":"${APP_ENV}"}</customFields>
+        </encoder>
+    </appender>
+
+    <appender name="ASYNC_LOGSTASH" class="ch.qos.logback.classic.AsyncAppender">
+        <queueSize>2048</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+        <appender-ref ref="LOGSTASH"/>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_LOGSTASH"/>
+    </root>
+</configuration>

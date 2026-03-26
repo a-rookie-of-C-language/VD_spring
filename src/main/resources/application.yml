@@ -1,5 +1,7 @@
 server:
   port: 8080
+  servlet:
+    context-path: /api
   # Enable compression for better performance
   compression:
     enabled: true
@@ -76,8 +78,24 @@ app:
       expiry-minutes: 2400
   messaging:
     dev-mode-trigger: true
+  logging:
+    service-name: volunteer-duration
+    environment: dev
+    elk:
+      host: localhost
+      port: 5000
+    es:
+      scheme: http
+      host: localhost
+      port: 9200
+      index-pattern: volunteer-duration-*
 
 mybatis:
   configuration:
     lazy-loading-enabled: true
     aggressive-lazy-loading: false
+
+logging:
+  level:
+    root: INFO
+    site.arookieofc: INFO

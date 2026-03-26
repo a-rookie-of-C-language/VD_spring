@@ -1,0 +1,98 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,image/svg+xml
+
+spring:
+  web:
+    resources:
+      static-locations: file:./frontend/web/, classpath:/static/
+      chain:
+        strategy:
+          content:
+            enabled: true
+        cache: true
+      cache:
+        cachecontrol:
+          max-age: 30d
+          cache-public: true
+          must-revalidate: true
+  datasource:
+    url: jdbc:mysql://localhost:3308/vd?allowPublicKeyRetrieval=TRUE&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: su201314
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 20MB
+      max-request-size: 20MB
+  rabbitmq:
+    host: localhost
+    port: 5673
+    username: guest
+    password: guest
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+  mail:
+    host: smtp.163.com
+    port: 25
+    username: ergr16976258@163.com
+    password: AAXVZdBKbVgDnSbG
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+    default-encoding: UTF-8
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info,env
+  endpoint:
+    health:
+      show-details: always
+  simple:
+    metrics:
+      export:
+        enabled: true
+
+app:
+  upload:
+    base-path: data/uploads
+    cover-path: covers
+  security:
+    jwt:
+      secret: hzz.arookieofc-language.Elysia.Cyrene
+      expiry-minutes: 2400
+  messaging:
+    dev-mode-trigger: true
+  logging:
+    service-name: volunteer-duration
+    environment: bundle
+    elk:
+      host: localhost
+      port: 5001
+    es:
+      scheme: http
+      host: localhost
+      port: 9201
+      index-pattern: volunteer-duration-*
+
+mybatis:
+  configuration:
+    lazy-loading-enabled: true
+    aggressive-lazy-loading: false
+
+logging:
+  level:
+    root: INFO
+    site.arookieofc: INFO

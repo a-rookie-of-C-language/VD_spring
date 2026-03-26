@@ -17,10 +17,11 @@ public class ActivityListRequestVO {
     private String functionary;
     private ActivityStatus status;
     private ActivityType type;
+    @Builder.Default
     private Integer pageSize = 10;
+    @Builder.Default
     private Integer page = 1;
 }
-
 
 
 

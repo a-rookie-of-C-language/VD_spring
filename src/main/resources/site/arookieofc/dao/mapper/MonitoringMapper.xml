@@ -122,12 +122,16 @@
     <select id="getStatisticsByGrade" resultType="java.util.HashMap">
         SELECT
             u.grade as name,
-            COUNT(DISTINCT u.student_no) as userCount,
-            COUNT(DISTINCT ap.activity_id) as activityCount,
+            COUNT(u.student_no) as userCount,
+            COALESCE(SUM(apu.activity_count), 0) as activityCount,
             COALESCE(SUM(u.total_hours), 0) as totalHours,
             COALESCE(AVG(u.total_hours), 0) as averageHours
         FROM users u
-        LEFT JOIN activity_participants ap ON u.student_no = ap.student_no
+        LEFT JOIN (
+            SELECT student_no, COUNT(DISTINCT activity_id) AS activity_count
+            FROM activity_participants
+            GROUP BY student_no
+        ) apu ON u.student_no = apu.student_no
         WHERE u.grade IS NOT NULL AND u.grade != ''
         GROUP BY u.grade
         ORDER BY totalHours DESC
@@ -137,12 +141,16 @@
     <select id="getStatisticsByCollege" resultType="java.util.HashMap">
         SELECT
             u.college as name,
-            COUNT(DISTINCT u.student_no) as userCount,
-            COUNT(DISTINCT ap.activity_id) as activityCount,
+            COUNT(u.student_no) as userCount,
+            COALESCE(SUM(apu.activity_count), 0) as activityCount,
             COALESCE(SUM(u.total_hours), 0) as totalHours,
             COALESCE(AVG(u.total_hours), 0) as averageHours
         FROM users u
-        LEFT JOIN activity_participants ap ON u.student_no = ap.student_no
+        LEFT JOIN (
+            SELECT student_no, COUNT(DISTINCT activity_id) AS activity_count
+            FROM activity_participants
+            GROUP BY student_no
+        ) apu ON u.student_no = apu.student_no
         WHERE u.college IS NOT NULL AND u.college != ''
         GROUP BY u.college
         ORDER BY totalHours DESC
@@ -152,12 +160,16 @@
     <select id="getStatisticsByClazz" resultType="java.util.HashMap">
         SELECT
             u.clazz as name,
-            COUNT(DISTINCT u.student_no) as userCount,
-            COUNT(DISTINCT ap.activity_id) as activityCount,
+            COUNT(u.student_no) as userCount,
+            COALESCE(SUM(apu.activity_count), 0) as activityCount,
             COALESCE(SUM(u.total_hours), 0) as totalHours,
             COALESCE(AVG(u.total_hours), 0) as averageHours
         FROM users u
-        LEFT JOIN activity_participants ap ON u.student_no = ap.student_no
+        LEFT JOIN (
+            SELECT student_no, COUNT(DISTINCT activity_id) AS activity_count
+            FROM activity_participants
+            GROUP BY student_no
+        ) apu ON u.student_no = apu.student_no
         WHERE u.clazz IS NOT NULL AND u.clazz != ''
         GROUP BY u.clazz
         ORDER BY totalHours DESC
@@ -224,7 +236,7 @@
 
     <!-- 根据筛选条件统计参加活动人次 -->
     <select id="countParticipantsByFilter" resultType="java.lang.Long">
-        SELECT COUNT(DISTINCT ap.id)
+        SELECT COUNT(ap.id)
         FROM activity_participants ap
         INNER JOIN users u ON ap.student_no = u.student_no
         <where>
@@ -249,9 +261,13 @@
             u.grade as grade,
             u.clazz as clazz,
             COALESCE(u.total_hours, 0) as totalDuration,
-            COUNT(DISTINCT ap.activity_id) as activityCount
+            COALESCE(apu.activity_count, 0) as activityCount
         FROM users u
-        LEFT JOIN activity_participants ap ON u.student_no = ap.student_no
+        LEFT JOIN (
+            SELECT student_no, COUNT(DISTINCT activity_id) AS activity_count
+            FROM activity_participants
+            GROUP BY student_no
+        ) apu ON u.student_no = apu.student_no
         <where>
             <if test="college != null and college != ''">
                 AND u.college = #{college}
@@ -263,7 +279,6 @@
                 AND u.clazz = #{clazz}
             </if>
         </where>
-        GROUP BY u.student_no, u.username, u.college, u.grade, u.clazz, u.total_hours
         <choose>
             <when test="sortField == 'duration' or sortField == 'totalDuration'">
                 ORDER BY totalDuration
@@ -283,4 +298,3 @@
     </select>
 
 </mapper>
-

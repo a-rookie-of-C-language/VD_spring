@@ -1,0 +1,211 @@
+{
+    "took": 3,
+    "timed_out": false,
+    "_shards": {
+        "total": 17,
+        "successful": 17,
+        "skipped": 0,
+        "failed": 0
+    },
+    "hits": {
+        "total": {
+            "value": 143,
+            "relation": "eq"
+        },
+        "max_score": 1,
+        "hits": [
+            {
+                "_index": "volunteer-business-log-2026-03-04",
+                "_id": "4SR0t5wBp0WfNRnOsbVY",
+                "_score": 1,
+                "_source": {
+                    "timestamp": "2026-03-04T14:06:43.896387500+08:00",
+                    "operatorStudentNo": "12323020421",
+                    "operatorRole": "functionary",
+                    "action": "发布活动",
+                    "targetType": "activity",
+                    "targetId": "906e6597-c4e0-41b4-8064-a58f13eadc41",
+                    "targetName": "测试日志",
+                    "detail": "负责人发布活动",
+                    "status": "SUCCESS"
+                }
+            },
+            {
+                "_index": "volunteer-business-log-2026-03-04",
+                "_id": "4iR1t5wBp0WfNRnOa7WM",
+                "_score": 1,
+                "_source": {
+                    "timestamp": "2026-03-04T14:07:31.722993700+08:00",
+                    "operatorStudentNo": "12423020320",
+                    "operatorRole": "admin",
+                    "action": "审核活动",
+                    "targetType": "activity",
+                    "targetId": "906e6597-c4e0-41b4-8064-a58f13eadc41",
+                    "targetName": "测试日志",
+                    "detail": "管理员审核活动",
+                    "status": "SUCCESS"
+                }
+            },
+            {
+                "_index": "volunteer-duration-2026.03.04",
+                "_id": "9lpluZwBnCS1lGkGOWyr",
+                "_score": 1,
+                "_source": {
+                    "logger_name": "org.apache.catalina.core.StandardEngine",
+                    "ELK_PORT": "5000",
+                    "service": "volunteer-duration",
+                    "environment": "dev",
+                    "@timestamp": "2026-03-04T15:08:36.420221200Z",
+                    "APP_ENV": "dev",
+                    "@version": "1",
+                    "level": "INFO",
+                    "level_value": 20000,
+                    "thread_name": "main",
+                    "APP_NAME": "volunteer-duration",
+                    "ELK_HOST": "localhost",
+                    "message": "Starting Servlet engine: [Apache Tomcat/10.1.31]"
+                }
+            },
+            {
+                "_index": "volunteer-duration-2026.03.04",
+                "_id": "91pluZwBnCS1lGkGOmwJ",
+                "_score": 1,
+                "_source": {
+                    "logger_name": "org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/]",
+                    "ELK_PORT": "5000",
+                    "service": "volunteer-duration",
+                    "environment": "dev",
+                    "@timestamp": "2026-03-04T15:08:36.490020900Z",
+                    "APP_ENV": "dev",
+                    "@version": "1",
+                    "level": "INFO",
+                    "level_value": 20000,
+                    "thread_name": "main",
+                    "APP_NAME": "volunteer-duration",
+                    "ELK_HOST": "localhost",
+                    "message": "Initializing Spring embedded WebApplicationContext"
+                }
+            },
+            {
+                "_index": "volunteer-duration-2026.03.04",
+                "_id": "-VpluZwBnCS1lGkGOmyl",
+                "_score": 1,
+                "_source": {
+                    "logger_name": "org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration",
+                    "ELK_PORT": "5000",
+                    "service": "volunteer-duration",
+                    "environment": "dev",
+                    "@timestamp": "2026-03-04T15:08:37.669245600Z",
+                    "APP_ENV": "dev",
+                    "@version": "1",
+                    "level": "WARN",
+                    "level_value": 30000,
+                    "thread_name": "main",
+                    "APP_NAME": "volunteer-duration",
+                    "ELK_HOST": "localhost",
+                    "message": "\r\n\r\nUsing generated security password: da19d754-a7b4-4ff6-9ae6-1a2eb911cff7\r\n\r\nThis generated password is for development use only. Your security configuration must be updated before running your application in production.\r\n"
+                }
+            },
+            {
+                "_index": "volunteer-duration-2026.03.04",
+                "_id": "-lpluZwBnCS1lGkGOmy0",
+                "_score": 1,
+                "_source": {
+                    "logger_name": "org.springframework.security.config.annotation.authentication.configuration.InitializeUserDetailsBeanManagerConfigurer$InitializeUserDetailsManagerConfigurer",
+                    "ELK_PORT": "5000",
+                    "service": "volunteer-duration",
+                    "environment": "dev",
+                    "@timestamp": "2026-03-04T15:08:37.677755700Z",
+                    "APP_ENV": "dev",
+                    "@version": "1",
+                    "level": "INFO",
+                    "level_value": 20000,
+                    "thread_name": "main",
+                    "APP_NAME": "volunteer-duration",
+                    "ELK_HOST": "localhost",
+                    "message": "Global AuthenticationManager configured with UserDetailsService bean with name inMemoryUserDetailsManager"
+                }
+            },
+            {
+                "_index": "volunteer-duration-2026.03.04",
+                "_id": "-1pluZwBnCS1lGkGOmzi",
+                "_score": 1,
+                "_source": {
+                    "logger_name": "org.apache.coyote.http11.Http11NioProtocol",
+                    "ELK_PORT": "5000",
+                    "service": "volunteer-duration",
+                    "environment": "dev",
+                    "@timestamp": "2026-03-04T15:08:38.729172800Z",
+                    "APP_ENV": "dev",
+                    "@version": "1",
+                    "level": "INFO",
+                    "level_value": 20000,
+                    "thread_name": "main",
+                    "APP_NAME": "volunteer-duration",
+                    "ELK_HOST": "localhost",
+                    "message": "Starting ProtocolHandler [\"http-nio-8080\"]"
+                }
+            },
+            {
+                "_index": "volunteer-duration-2026.03.04",
+                "_id": "_VpluZwBnCS1lGkGOmz-",
+                "_score": 1,
+                "_source": {
+                    "logger_name": "org.springframework.amqp.rabbit.connection.CachingConnectionFactory",
+                    "ELK_PORT": "5000",
+                    "service": "volunteer-duration",
+                    "environment": "dev",
+                    "@timestamp": "2026-03-04T15:08:38.748040300Z",
+                    "APP_ENV": "dev",
+                    "@version": "1",
+                    "level": "INFO",
+                    "level_value": 20000,
+                    "thread_name": "main",
+                    "APP_NAME": "volunteer-duration",
+                    "ELK_HOST": "localhost",
+                    "message": "Attempting to connect to: [localhost:5672]"
+                }
+            },
+            {
+                "_index": "volunteer-duration-2026.03.04",
+                "_id": "AFpluZwBnCS1lGkGO23b",
+                "_score": 1,
+                "_source": {
+                    "logger_name": "site.arookieofc.VolunteerApplication",
+                    "ELK_PORT": "5000",
+                    "service": "volunteer-duration",
+                    "environment": "dev",
+                    "@timestamp": "2026-03-04T15:08:34.865112500Z",
+                    "APP_ENV": "dev",
+                    "@version": "1",
+                    "level": "INFO",
+                    "level_value": 20000,
+                    "thread_name": "main",
+                    "APP_NAME": "volunteer-duration",
+                    "ELK_HOST": "localhost",
+                    "message": "No active profile set, falling back to 1 default profile: \"default\""
+                }
+            },
+            {
+                "_index": "volunteer-duration-2026.03.04",
+                "_id": "AlpouZwBnCS1lGkGXm28",
+                "_score": 1,
+                "_source": {
+                    "logger_name": "org.apache.catalina.core.ContainerBase.[Tomcat].[localhost].[/]",
+                    "ELK_PORT": "5000",
+                    "service": "volunteer-duration",
+                    "environment": "dev",
+                    "@timestamp": "2026-03-04T15:12:30.770658300Z",
+                    "APP_ENV": "dev",
+                    "@version": "1",
+                    "level": "INFO",
+                    "level_value": 20000,
+                    "thread_name": "http-nio-8080-exec-1",
+                    "APP_NAME": "volunteer-duration",
+                    "ELK_HOST": "localhost",
+                    "message": "Initializing Spring DispatcherServlet 'dispatcherServlet'"
+                }
+            }
+        ]
+    }
+}

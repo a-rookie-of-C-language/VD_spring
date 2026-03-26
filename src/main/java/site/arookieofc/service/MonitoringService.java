@@ -2,15 +2,25 @@ package site.arookieofc.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import site.arookieofc.controller.VO.MonitoringDashboardVO;
 import site.arookieofc.controller.VO.MonitoringDashboardVO.*;
 import site.arookieofc.controller.VO.MonitoringFiltersVO;
+import site.arookieofc.controller.VO.MonitoringLogVO;
 import site.arookieofc.controller.VO.MonitoringOverviewVO;
 import site.arookieofc.controller.VO.UserStatVO;
 import site.arookieofc.controller.VO.UserStatPageVO;
 import site.arookieofc.dao.mapper.MonitoringMapper;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -21,6 +31,23 @@ import java.util.stream.Collectors;
 public class MonitoringService {
 
     private final MonitoringMapper monitoringMapper;
+    private final ObjectMapper objectMapper;
+
+    @Value("${app.logging.es.host:localhost}")
+    private String esHost;
+
+    @Value("${app.logging.es.port:9200}")
+    private int esPort;
+
+    @Value("${app.logging.es.scheme:http}")
+    private String esScheme;
+
+    @Value("${app.logging.es.index-pattern:volunteer-duration-*}")
+    private String esIndexPattern;
+
+    private final HttpClient httpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(3))
+            .build();
 
     public MonitoringDashboardVO getDashboardData(String timeRange) {
         // 计算时间范围
@@ -146,6 +173,107 @@ public class MonitoringService {
                 .size(pageSize)
                 .records(records)
                 .build();
+    }
+
+    public List<MonitoringLogVO> getRecentLogs(int size, String keyword) {
+        int boundedSize = Math.max(1, Math.min(size, 200));
+        String endpoint = String.format(
+                "%s://%s:%d/%s/_search?ignore_unavailable=true&allow_no_indices=true",
+                esScheme,
+                esHost,
+                esPort,
+                esIndexPattern
+        );
+
+        String body;
+        if (keyword != null && !keyword.isBlank()) {
+            body = String.format(
+                    Locale.ROOT,
+                    "{\"size\":%d,\"sort\":[{\"@timestamp\":{\"order\":\"desc\"}}],\"query\":{\"bool\":{\"should\":[{\"match_phrase\":{\"message\":\"%s\"}},{\"match_phrase\":{\"logger_name\":\"%s\"}},{\"match_phrase\":{\"level\":\"%s\"}}],\"minimum_should_match\":1}}}",
+                    boundedSize,
+                    escapeJson(keyword),
+                    escapeJson(keyword),
+                    escapeJson(keyword)
+            );
+        } else {
+            body = String.format(
+                    Locale.ROOT,
+                    "{\"size\":%d,\"sort\":[{\"@timestamp\":{\"order\":\"desc\"}}],\"query\":{\"match_all\":{}}}",
+                    boundedSize
+            );
+        }
+
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(endpoint))
+                    .timeout(Duration.ofSeconds(5))
+                    .header("Content-Type", "application/json")
+                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                String responseBody = response.body();
+                String bodyPreview = responseBody == null ? "" : responseBody.substring(0, Math.min(responseBody.length(), 300));
+                throw new IllegalStateException("Elasticsearch query failed: HTTP " + response.statusCode() + ", body=" + bodyPreview);
+            }
+
+            JsonNode root = objectMapper.readTree(response.body());
+            JsonNode hits = root.path("hits").path("hits");
+            if (!hits.isArray()) {
+                return Collections.emptyList();
+            }
+
+            List<MonitoringLogVO> logs = new ArrayList<>();
+            for (JsonNode hit : hits) {
+                JsonNode source = hit.path("_source");
+                logs.add(MonitoringLogVO.builder()
+                        .timestamp(source.path("@timestamp").asText(""))
+                        .level(source.path("level").asText("UNKNOWN"))
+                        .logger(source.path("logger_name").asText(""))
+                        .thread(source.path("thread_name").asText(""))
+                        .message(source.path("message").asText(""))
+                        .service(source.path("service").asText(""))
+                        .environment(source.path("environment").asText(""))
+                        .build());
+            }
+            return logs;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            log.warn("Elasticsearch query interrupted. endpoint={}, size={}, keyword={}", endpoint, boundedSize, safeKeyword(keyword), e);
+            return Collections.emptyList();
+        } catch (Exception e) {
+            String errorMessage = e.getMessage();
+            if (errorMessage == null || errorMessage.isBlank()) {
+                errorMessage = e.getClass().getName();
+            }
+            log.warn(
+                    "Failed to query Elasticsearch logs. endpoint={}, size={}, keyword={}, error={}",
+                    endpoint,
+                    boundedSize,
+                    safeKeyword(keyword),
+                    errorMessage,
+                    e
+            );
+            return Collections.emptyList();
+        }
+    }
+
+    private String safeKeyword(String keyword) {
+        if (keyword == null) {
+            return "";
+        }
+        String trimmed = keyword.trim();
+        return trimmed.length() > 80 ? trimmed.substring(0, 80) + "..." : trimmed;
+    }
+
+    private String escapeJson(String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     /**
@@ -321,4 +449,3 @@ public class MonitoringService {
         }
     }
 }
-
