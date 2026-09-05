@@ -99,7 +99,7 @@
     <where>
       <if test="type != null">AND type = #{type}</if>
       <if test="status != null">AND status = #{status}</if>
-      <if test="status == null and excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
+      <if test="excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
       <if test="functionary != null and functionary != ''">AND functionary = #{functionary}</if>
       <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
       <if test="startFrom != null">AND start_time &gt;= #{startFrom}</if>
@@ -117,7 +117,7 @@
     <where>
       <if test="type != null">AND type = #{type}</if>
       <if test="status != null">AND status = #{status}</if>
-      <if test="status == null and excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
+      <if test="excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
       <if test="functionary != null and functionary != ''">AND functionary = #{functionary}</if>
       <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
       <if test="startFrom != null">AND start_time &gt;= #{startFrom}</if>
@@ -137,7 +137,7 @@
     <where>
       <if test="type != null">AND type = #{type}</if>
       <if test="status != null">AND status = #{status}</if>
-      <if test="status == null and excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
+      <if test="excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
       <if test="functionary != null and functionary != ''">AND functionary = #{functionary}</if>
       <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
       <if test="startFrom != null">AND start_time &gt;= #{startFrom}</if>

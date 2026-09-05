@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
+import com.rabbitmq.client.AMQP;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -168,17 +169,23 @@ public class ActivityStatusTaskService {
 
             byte[] body = objectMapper.writeValueAsBytes(payload);
 
-            MessageProperties props = new MessageProperties();
-            props.setContentType(MessageProperties.CONTENT_TYPE_JSON);
-            props.setHeader("x-event-id", task.getEventId());
-            props.setHeader("x-attempt", nextAttempt);
-            Message message = new Message(body, props);
-
-            rabbitTemplate.send(RabbitConfig.UPDATE_EXCHANGE, RabbitConfig.UPDATE_ROUTING_KEY, message);
+            rabbitTemplate.execute(channel -> {
+                try {
+                    AMQP.BasicProperties props = new AMQP.BasicProperties.Builder()
+                            .contentType(MessageProperties.CONTENT_TYPE_JSON)
+                            .headers(Map.of(
+                                    "x-event-id", task.getEventId(),
+                                    "x-attempt", nextAttempt))
+                            .build();
+                    channel.basicPublish(RabbitConfig.UPDATE_EXCHANGE, RabbitConfig.UPDATE_ROUTING_KEY, props, body);
+                    channel.waitForConfirmsOrDie(5_000);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    throw new AmqpException("publish confirm interrupted", e);
+                }
+                return null;
+            });
             taskMapper.markSent(task.getEventId(), LocalDateTime.now(ZONE));
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            markPublishFailed(task.getEventId(), nextAttempt, e.getMessage());
         } catch (JsonProcessingException | AmqpException e) {
             markPublishFailed(task.getEventId(), nextAttempt, e.getMessage());
         }

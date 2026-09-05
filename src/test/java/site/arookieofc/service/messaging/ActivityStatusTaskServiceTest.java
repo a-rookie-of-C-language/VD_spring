@@ -3,7 +3,9 @@ package site.arookieofc.service.messaging;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import org.springframework.amqp.AmqpException;
 import org.junit.jupiter.api.Test;
+import com.rabbitmq.client.Channel;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import site.arookieofc.dao.entity.ActivityStatusTask;
 import site.arookieofc.dao.mapper.ActivityStatusTaskMapper;
@@ -11,7 +13,6 @@ import site.arookieofc.dao.mapper.ActivityStatusTaskMapper;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -41,7 +42,7 @@ class ActivityStatusTaskServiceTest {
     }
 
     @Test
-    void recoverPendingTasksRestoresInterruptedFlagWhenPublisherConfirmWaitIsInterrupted() {
+    void recoverPendingTasksMarksFailedWhenPublisherThrowsAmqpException() {
         ActivityStatusTaskMapper taskMapper = taskMapper();
         RabbitTemplate rabbitTemplate = rabbitTemplate();
         ActivityStatusTaskService service = newService(taskMapper, rabbitTemplate);
@@ -49,16 +50,17 @@ class ActivityStatusTaskServiceTest {
         ActivityStatusTask task = statusTask(eventId, "activity-2", "EnrollmentStarted", 0);
         when(taskMapper.listDispatchable(eq(100), any(LocalDateTime.class), any(LocalDateTime.class)))
                 .thenReturn(List.of(task));
+        when(rabbitTemplate.execute(any())).thenAnswer(invocation -> {
+            org.springframework.amqp.rabbit.core.ChannelCallback<Object> callback = invocation.getArgument(0);
+            Channel channel = mock(Channel.class);
+            org.mockito.Mockito.doThrow(new AmqpException("stop"))
+                    .when(channel).waitForConfirmsOrDie(5000);
+            return callback.doInRabbit(channel);
+        });
 
-        try {
-            Thread.currentThread().interrupt();
-            service.recoverPendingTasks();
+        service.recoverPendingTasks();
 
-            assertTrue(Thread.currentThread().isInterrupted());
-            verify(taskMapper).markFailed(eq(eventId), eq(1), anyString(), any(LocalDateTime.class), any(LocalDateTime.class));
-        } finally {
-            Thread.interrupted();
-        }
+        verify(taskMapper).markFailed(eq(eventId), eq(1), anyString(), any(LocalDateTime.class), any(LocalDateTime.class));
     }
 
     @Test

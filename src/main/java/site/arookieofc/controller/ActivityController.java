@@ -70,7 +70,7 @@ public class ActivityController {
 
         String role = principal != null ? principal.getRole() : null;
         String studentNo = principal != null ? principal.getStudentNo() : null;
-        boolean useAll = status != null || AuthorizationGuards.isAdmin(principal)
+        boolean useAll = AuthorizationGuards.isAdmin(principal)
                 || ("functionary".equals(role) && functionary != null && functionary.equals(studentNo));
 
         int total = useAll ? activityService.countActivitiesAll(type, status, functionary, name, sf, st, isFull)

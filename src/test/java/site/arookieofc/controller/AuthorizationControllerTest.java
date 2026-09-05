@@ -2,6 +2,7 @@ package site.arookieofc.controller;
 
 import org.junit.jupiter.api.Test;
 import site.arookieofc.common.exception.BusinessException;
+import site.arookieofc.controller.VO.ActivityQueryVO;
 import site.arookieofc.controller.VO.Result;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.ActivityService;
@@ -176,6 +177,22 @@ class AuthorizationControllerTest {
                 controller.review(principal(studentNo, userRole, username), activityId, true, null));
 
         verify(activityService, never()).reviewActivity(anyString(), anyBoolean(), any(), anyString());
+    }
+
+    @Test
+    void activityQueryWithStatusDoesNotExposeHiddenRowsForPlainUser() {
+        ActivityService activityService = activityService();
+        ActivityController controller = newActivityController(activityService);
+        ActivityQueryVO query = ActivityQueryVO.builder()
+                .status(ActivityStatus.UnderReview)
+                .build();
+
+        controller.queryActivities(principal("20240001", "user", "Alice"), query);
+
+        verify(activityService).countActivities(null, ActivityStatus.UnderReview, null, null, null, null, null);
+        verify(activityService).listActivitiesPaged(null, ActivityStatus.UnderReview, null, null, null, null, null, 1, 10);
+        verify(activityService, never()).countActivitiesAll(any(), any(), any(), any(), any(), any(), any());
+        verify(activityService, never()).listActivitiesPagedAll(any(), any(), any(), any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt(), org.mockito.ArgumentMatchers.anyInt());
     }
 
     @Test
