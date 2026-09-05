@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import site.arookieofc.configuration.SecurityConfig;
 import site.arookieofc.security.JwtAuthenticationFilter;
 import site.arookieofc.security.UserPrincipal;
@@ -23,6 +24,7 @@ import site.arookieofc.service.MonitoringService;
 import site.arookieofc.service.MyActivityService;
 import site.arookieofc.service.PendingActivityService;
 import site.arookieofc.service.UserService;
+import site.arookieofc.service.messaging.ActivityStatusTaskService;
 import site.arookieofc.service.dto.ActivityDTO;
 import site.arookieofc.service.monitor.DeveloperMonitorService;
 import site.arookieofc.service.monitor.RequestMetricsCollector;
@@ -30,6 +32,7 @@ import site.arookieofc.service.monitor.SystemMetricsWebSocketHandler;
 import site.arookieofc.util.JWTUtils;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
@@ -59,6 +62,8 @@ class SecurityMatcherIntegrationTest {
 
     @MockBean
     private BusinessOperationLogService businessOperationLogService;
+    @MockBean
+    private ActivityStatusTaskService activityStatusTaskService;
 
     @MockBean
     private UserService userService;
@@ -133,6 +138,20 @@ class SecurityMatcherIntegrationTest {
     }
 
     @Test
+    void monitoringReplayDeadTasksRequiresSuperAdmin() throws Exception {
+        mockMvc.perform(post("/api/monitoring/mq-task-replay-dead")
+                        .param("limit", "20")
+                        .with(user("admin").roles("ADMIN")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/monitoring/mq-task-replay-dead")
+                        .param("limit", "20")
+                        .with(user("root").roles("SUPERADMIN")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200));
+    }
+
+    @Test
     void monitoringPrimaryPathAlsoRequiresSuperAdmin() throws Exception {
         mockMvc.perform(get("/monitoring/dashboard")
                         .with(user("admin").roles("ADMIN")))
@@ -189,6 +208,15 @@ class SecurityMatcherIntegrationTest {
     }
 
     @Test
+    void rawAttachmentsAreNotPublic() throws Exception {
+        mockMvc.perform(get("/attachments/demo.txt"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/covers/demo.png"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
     void activityCreateRejectsPlainUserButAllowsFunctionary() throws Exception {
         MockMultipartFile emptyFile = new MockMultipartFile("coverFile", "", MediaType.TEXT_PLAIN_VALUE, new byte[0]);
 
@@ -196,48 +224,99 @@ class SecurityMatcherIntegrationTest {
                         .file(emptyFile)
                         .param("name", "Test Activity")
                         .param("type", "COMMUNITY_SERVICE")
-                        .with(authentication(new UserPrincipal("user1", "user", "User One"))))
+                        .with(auth("user1", "user", "User One")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(403));
 
-        ActivityDTO created = ActivityDTO.builder()
-                .id("a1")
-                .functionary("leader")
-                .name("Test Activity")
-                .build();
+        ActivityDTO created = activity("a1", "leader", "Test Activity");
         when(activityService.createActivity(any(ActivityDTO.class))).thenReturn(created);
 
         mockMvc.perform(multipart("/activities")
                         .file(emptyFile)
                         .param("name", "Test Activity")
                         .param("type", "COMMUNITY_SERVICE")
-                        .with(authentication(new UserPrincipal("leader", "functionary", "Leader"))))
+                        .with(auth("leader", "functionary", "Leader")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200))
                 .andExpect(jsonPath("$.data.functionary").value("leader"));
     }
 
     @Test
+    void activityQueryInvalidDateReturns400() throws Exception {
+        mockMvc.perform(post("/activities/query")
+                        .with(auth("user1", "user", "User One"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"startFrom\":\"not-a-date\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
+    }
+
+    @Test
     void activityDeleteRequiresOwnerOrAdmin() throws Exception {
-        ActivityDTO ownedByLeader = ActivityDTO.builder()
-                .id("a1")
-                .functionary("leader")
-                .build();
+        ActivityDTO ownedByLeader = activity("a1", "leader");
         when(activityService.getActivityById("a1")).thenReturn(ownedByLeader);
 
         mockMvc.perform(delete("/activities/a1")
-                        .with(authentication(new UserPrincipal("other", "functionary", "Other"))))
+                        .with(auth("other", "functionary", "Other")))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value(403));
 
         mockMvc.perform(delete("/activities/a1")
-                        .with(authentication(new UserPrincipal("leader", "functionary", "Leader"))))
+                        .with(auth("leader", "functionary", "Leader")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
 
         mockMvc.perform(delete("/activities/a1")
-                        .with(authentication(new UserPrincipal("admin", "admin", "Admin"))))
+                        .with(auth("admin", "admin", "Admin")))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value(200));
+    }
+
+    @Test
+    void activityUpdateRequiresOwnerOrAdmin() throws Exception {
+        ActivityDTO ownedByLeader = activity("a1", "leader", "Original");
+        ActivityDTO updated = activity("a1", "leader", "Updated");
+        when(activityService.getActivityById("a1")).thenReturn(ownedByLeader);
+        when(activityService.updateActivity(eq("a1"), any(ActivityDTO.class))).thenReturn(updated);
+
+        MockMultipartFile emptyFile = new MockMultipartFile("coverFile", "", MediaType.TEXT_PLAIN_VALUE, new byte[0]);
+        mockMvc.perform(multipart("/activities/a1")
+                        .file(emptyFile)
+                        .param("name", "Updated")
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
+                        .with(auth("other", "functionary", "Other")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value(403));
+
+        mockMvc.perform(multipart("/activities/a1")
+                        .file(emptyFile)
+                        .param("name", "Updated")
+                        .with(request -> {
+                            request.setMethod("PUT");
+                            return request;
+                        })
+                        .with(auth("leader", "functionary", "Leader")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.code").value(200))
+                .andExpect(jsonPath("$.data.functionary").value("leader"));
+    }
+
+    private RequestPostProcessor auth(String studentNo, String role, String username) {
+        return authentication(new UserPrincipal(studentNo, role, username));
+    }
+
+    private ActivityDTO activity(String id, String functionary) {
+        return activity(id, functionary, null);
+    }
+
+    private ActivityDTO activity(String id, String functionary, String name) {
+        return ActivityDTO.builder()
+                .id(id)
+                .functionary(functionary)
+                .name(name)
+                .build();
     }
 }

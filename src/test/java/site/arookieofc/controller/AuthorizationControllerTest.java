@@ -17,12 +17,16 @@ import site.arookieofc.service.dto.PendingActivityDTO;
 import site.arookieofc.service.dto.UserDTO;
 
 import java.time.OffsetDateTime;
-import java.util.Collections;
+import java.util.List;
 import java.util.Optional;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -30,112 +34,251 @@ class AuthorizationControllerTest {
 
     @Test
     void userLookupAllowsSelfButRejectsOthers() {
-        UserService userService = mock(UserService.class);
+        UserService userService = userService();
         UserController controller = new UserController(userService, null);
+        String studentNo = "20240001";
+        String otherStudentNo = "20240002";
+        String username = "Alice";
+        String otherUsername = "Bob";
+        String userRole = "user";
 
-        UserDTO user = UserDTO.builder().studentNo("20240001").username("Alice").build();
-        when(userService.getUserByStudentNo("20240001")).thenReturn(Optional.of(user));
+        UserDTO user = UserDTO.builder().studentNo(studentNo).username(username).build();
+        when(userService.getUserByStudentNo(studentNo)).thenReturn(Optional.of(user));
 
-        Result selfResult = controller.getUserByStudentNo(new UserPrincipal("20240001", "user", "Alice"), "20240001");
+        Result selfResult = controller.getUserByStudentNo(principal(studentNo, userRole, username), studentNo);
         assertEquals(200, selfResult.getCode());
 
         assertThrows(BusinessException.class, () ->
-                controller.getUserByStudentNo(new UserPrincipal("20240002", "user", "Bob"), "20240001"));
+                controller.getUserByStudentNo(principal(otherStudentNo, userRole, otherUsername), studentNo));
     }
 
     @Test
     void pendingActivityQueryForcesSubmittedByForNonAdmin() {
-        PendingActivityService pendingActivityService = mock(PendingActivityService.class);
-        BatchImportService batchImportService = mock(BatchImportService.class);
-        PendingActivityController controller = new PendingActivityController(pendingActivityService, batchImportService);
+        PendingActivityService pendingActivityService = pendingActivityService();
+        PendingActivityController controller = newPendingActivityController(pendingActivityService);
+        String studentNo = "20240001";
+        String username = "Alice";
+        String userRole = "user";
 
-        controller.queryPendingActivities(new UserPrincipal("20240001", "user", "Alice"), null);
+        controller.queryPendingActivities(principal(studentNo, userRole, username), null);
 
-        verify(pendingActivityService).countPendingActivities(null, null, null, "20240001");
-        verify(pendingActivityService).listPendingActivitiesPaged(null, null, null, "20240001", 1, 10);
+        verify(pendingActivityService).countPendingActivities(null, null, null, studentNo);
+        verify(pendingActivityService).listPendingActivitiesPaged(null, null, null, studentNo, 1, 10);
+    }
+
+    @Test
+    void pendingActivityQueryRejectsMissingPrincipalBeforeServiceCall() {
+        PendingActivityService pendingActivityService = pendingActivityService();
+        PendingActivityController controller = newPendingActivityController(pendingActivityService);
+
+        assertThrows(BusinessException.class, () -> controller.queryPendingActivities(null, null));
+
+        verify(pendingActivityService, never()).countPendingActivities(null, null, null, null);
     }
 
     @Test
     void pendingActivityDetailRejectsNonOwner() {
-        PendingActivityService pendingActivityService = mock(PendingActivityService.class);
-        BatchImportService batchImportService = mock(BatchImportService.class);
-        PendingActivityController controller = new PendingActivityController(pendingActivityService, batchImportService);
+        PendingActivityService pendingActivityService = pendingActivityService();
+        PendingActivityController controller = newPendingActivityController(pendingActivityService);
+        String pendingActivityId = "p1";
+        String ownerStudentNo = "owner";
+        String otherUsername = "Bob";
+        String userRole = "user";
 
         PendingActivityDTO dto = PendingActivityDTO.builder()
-                .id("p1")
-                .submittedBy("owner")
+                .id(pendingActivityId)
+                .submittedBy(ownerStudentNo)
                 .status(ActivityStatus.UnderReview)
                 .build();
-        when(pendingActivityService.getPendingActivityById("p1")).thenReturn(dto);
+        when(pendingActivityService.getPendingActivityById(pendingActivityId)).thenReturn(dto);
 
         assertThrows(BusinessException.class, () ->
-                controller.getById(new UserPrincipal("other", "user", "Bob"), "p1"));
+                controller.getById(principal("other", userRole, otherUsername), pendingActivityId));
     }
 
     @Test
     void activityCreateRequiresPrivilegedRoleAndUsesPrincipalStudentNo() {
-        ActivityService activityService = mock(ActivityService.class);
-        ActivityController controller = new ActivityController(
-                activityService,
-                mock(UserService.class),
-                mock(PendingActivityService.class),
-                mock(FileUploadService.class),
-                mock(BatchImportService.class),
-                mock(MyActivityService.class)
-        );
+        ActivityService activityService = activityService();
+        ActivityController controller = newActivityController(activityService);
+        String studentNo = "20240001";
+        String functionaryStudentNo = "20249999";
+        String activityId = "a1";
+        String userRole = "user";
+        String functionaryRole = "functionary";
+        String username = "Alice";
+        String functionaryUsername = "Leader";
+        String activityName = "Test";
+        String activityDescription = "desc";
+        ActivityType activityType = ActivityType.COMMUNITY_SERVICE;
 
+        OffsetDateTime now = OffsetDateTime.now();
         ActivityDTO request = ActivityDTO.builder()
                 .functionary("spoofed")
-                .name("Test")
-                .type(ActivityType.COMMUNITY_SERVICE)
-                .description("desc")
-                .enrollmentStartTime(OffsetDateTime.now())
-                .enrollmentEndTime(OffsetDateTime.now().plusHours(1))
-                .startTime(OffsetDateTime.now().plusHours(2))
-                .expectedEndTime(OffsetDateTime.now().plusHours(3))
+                .name(activityName)
+                .type(activityType)
+                .description(activityDescription)
+                .enrollmentStartTime(now)
+                .enrollmentEndTime(now.plusHours(1))
+                .startTime(now.plusHours(2))
+                .expectedEndTime(now.plusHours(3))
                 .build();
 
         assertThrows(BusinessException.class, () ->
-                controller.create(new UserPrincipal("20240001", "user", "Alice"), request));
+                controller.create(principal(studentNo, userRole, username), request));
 
         ActivityDTO created = ActivityDTO.builder()
-                .id("a1")
-                .functionary("20249999")
-                .name("Test")
-                .type(ActivityType.COMMUNITY_SERVICE)
-                .description("desc")
-                .attachment(Collections.emptyList())
-                .participants(Collections.emptyList())
+                .id(activityId)
+                .functionary(functionaryStudentNo)
+                .name(activityName)
+                .type(activityType)
+                .description(activityDescription)
+                .attachment(List.of())
+                .participants(List.of())
                 .build();
         when(activityService.createActivity(request)).thenReturn(created);
 
-        Result result = controller.create(new UserPrincipal("20249999", "functionary", "Leader"), request);
+        Result result = controller.create(principal(functionaryStudentNo, functionaryRole, functionaryUsername), request);
         assertEquals(200, result.getCode());
-        assertEquals("20249999", request.getFunctionary());
+        assertEquals(functionaryStudentNo, request.getFunctionary());
+    }
+
+    @Test
+    void activityCreateRejectsMissingPrincipalBeforeServiceCall() {
+        ActivityService activityService = activityService();
+        ActivityController controller = newActivityController(activityService);
+
+        assertThrows(BusinessException.class, () -> controller.create(null, ActivityDTO.builder().build()));
+
+        verify(activityService, never()).createActivity(any(ActivityDTO.class));
+    }
+
+    @Test
+    void activityEnrollRejectsMissingPrincipalBeforeServiceCall() {
+        ActivityService activityService = activityService();
+        ActivityController controller = newActivityController(activityService);
+        String activityId = "a1";
+
+        assertThrows(BusinessException.class, () -> controller.enroll(activityId, null));
+
+        verify(activityService, never()).enroll(anyString(), anyString());
+    }
+
+    @Test
+    void activityReviewRequiresAdminBeforeServiceCall() {
+        ActivityService activityService = activityService();
+        ActivityController controller = newActivityController(activityService);
+        String studentNo = "20240001";
+        String activityId = "a1";
+        String userRole = "user";
+        String username = "Alice";
+
+        assertThrows(BusinessException.class, () ->
+                controller.review(principal(studentNo, userRole, username), activityId, true, null));
+
+        verify(activityService, never()).reviewActivity(anyString(), anyBoolean(), any(), anyString());
     }
 
     @Test
     void activityDeleteRejectsNonOwner() {
-        ActivityService activityService = mock(ActivityService.class);
-        ActivityController controller = new ActivityController(
-                activityService,
-                mock(UserService.class),
-                mock(PendingActivityService.class),
-                mock(FileUploadService.class),
-                mock(BatchImportService.class),
-                mock(MyActivityService.class)
-        );
+        ActivityService activityService = activityService();
+        ActivityController controller = newActivityController(activityService);
+        String activityId = "a1";
+        String ownerStudentNo = "owner";
+        String otherStudentNo = "other";
+        String functionaryRole = "functionary";
+        String otherUsername = "Other";
+        String ownerUsername = "Owner";
 
-        ActivityDTO existing = ActivityDTO.builder()
-                .id("a1")
-                .functionary("owner")
-                .build();
-        when(activityService.getActivityById("a1")).thenReturn(existing);
+        ActivityDTO existing = activity(activityId, ownerStudentNo);
+        when(activityService.getActivityById(activityId)).thenReturn(existing);
 
         assertThrows(BusinessException.class, () ->
-                controller.delete(new UserPrincipal("other", "functionary", "Other"), "a1"));
+                controller.delete(principal(otherStudentNo, functionaryRole, otherUsername), activityId));
 
-        controller.delete(new UserPrincipal("owner", "functionary", "Owner"), "a1");
-        verify(activityService).deleteActivity("a1");
+        controller.delete(principal(ownerStudentNo, functionaryRole, ownerUsername), activityId);
+        verify(activityService).deleteActivity(activityId);
+    }
+
+    @Test
+    void activityUpdateRejectsNonOwnerAndPreservesExistingFunctionary() {
+        ActivityService activityService = activityService();
+        ActivityController controller = newActivityController(activityService);
+        String activityId = "a1";
+        String ownerStudentNo = "owner";
+        String otherStudentNo = "other";
+        String updatedActivityName = "Updated";
+        ActivityType updatedActivityType = ActivityType.COMMUNITY_SERVICE;
+
+        ActivityDTO existing = activity(activityId, ownerStudentNo);
+        ActivityDTO request = ActivityDTO.builder()
+                .functionary("spoofed")
+                .name(updatedActivityName)
+                .type(updatedActivityType)
+                .build();
+        ActivityDTO updated = activity(activityId, ownerStudentNo, updatedActivityName);
+        when(activityService.getActivityById(activityId)).thenReturn(existing);
+        when(activityService.updateActivity(activityId, request)).thenReturn(updated);
+
+        assertThrows(BusinessException.class, () ->
+                controller.update(activityId, principal(otherStudentNo, "functionary", "Other"), request));
+
+        Result result = controller.update(activityId, principal(ownerStudentNo, "functionary", "Owner"), request);
+        assertEquals(200, result.getCode());
+        assertEquals(ownerStudentNo, request.getFunctionary());
+        verify(activityService).updateActivity(activityId, request);
+    }
+
+    private PendingActivityService pendingActivityService() {
+        return mock(PendingActivityService.class);
+    }
+
+    private ActivityService activityService() {
+        return mock(ActivityService.class);
+    }
+
+    private UserService userService() {
+        return mock(UserService.class);
+    }
+
+    private FileUploadService fileUploadService() {
+        return mock(FileUploadService.class);
+    }
+
+    private MyActivityService myActivityService() {
+        return mock(MyActivityService.class);
+    }
+
+    private BatchImportService batchImportService() {
+        return mock(BatchImportService.class);
+    }
+
+    private UserPrincipal principal(String studentNo, String role, String username) {
+        return new UserPrincipal(studentNo, role, username);
+    }
+
+    private ActivityDTO activity(String id, String functionary) {
+        return activity(id, functionary, null);
+    }
+
+    private ActivityDTO activity(String id, String functionary, String name) {
+        return ActivityDTO.builder()
+                .id(id)
+                .functionary(functionary)
+                .name(name)
+                .build();
+    }
+
+    private PendingActivityController newPendingActivityController(PendingActivityService pendingActivityService) {
+        return new PendingActivityController(pendingActivityService, batchImportService());
+    }
+
+    private ActivityController newActivityController(ActivityService activityService) {
+        return new ActivityController(
+                activityService,
+                userService(),
+                pendingActivityService(),
+                fileUploadService(),
+                batchImportService(),
+                myActivityService());
     }
 }

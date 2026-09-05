@@ -9,6 +9,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMock
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import site.arookieofc.configuration.SecurityConfig;
 import site.arookieofc.security.JwtAuthenticationFilter;
@@ -21,16 +22,20 @@ import site.arookieofc.service.MyActivityService;
 import site.arookieofc.service.PendingActivityService;
 import site.arookieofc.service.SuggestionService;
 import site.arookieofc.service.UserService;
+import site.arookieofc.service.messaging.ActivityStatusTaskService;
 import site.arookieofc.service.monitor.DeveloperMonitorService;
 import site.arookieofc.service.monitor.RequestMetricsCollector;
 import site.arookieofc.service.monitor.SystemMetricsWebSocketHandler;
 import site.arookieofc.util.JWTUtils;
 import site.arookieofc.util.TokenParseResult;
 
+import java.util.Optional;
+
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -59,6 +64,8 @@ class FocusedErrorStatusIntegrationTest {
     private DeveloperMonitorService developerMonitorService;
     @MockBean
     private BusinessOperationLogService businessOperationLogService;
+    @MockBean
+    private ActivityStatusTaskService activityStatusTaskService;
     @MockBean
     private ActivityService activityService;
     @MockBean
@@ -99,13 +106,22 @@ class FocusedErrorStatusIntegrationTest {
 
     @Test
     void loginFailureReturns401() throws Exception {
-        when(userService.login("20240001", "wrong")).thenReturn(java.util.Optional.empty());
+        when(userService.login("20240001", "wrong")).thenReturn(Optional.empty());
 
         mockMvc.perform(post("/user/login")
                         .contentType("application/json")
                         .content("{\"studentNo\":\"20240001\",\"password\":\"wrong\"}"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value(401));
+    }
+
+    @Test
+    void loginWithEmptyCredentialsReturns400() throws Exception {
+        mockMvc.perform(post("/user/login")
+                        .contentType("application/json")
+                        .content("{\"studentNo\":\"\",\"password\":\"\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value(400));
     }
 
     @Test
@@ -120,10 +136,10 @@ class FocusedErrorStatusIntegrationTest {
 
     @Test
     void pendingBatchImportInvalidExtensionReturns400() throws Exception {
-        org.springframework.mock.web.MockMultipartFile file = new org.springframework.mock.web.MockMultipartFile(
+        MockMultipartFile file = new MockMultipartFile(
                 "file", "bad.txt", "text/plain", "hello".getBytes());
 
-        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart("/pending-activities/batch-import")
+        mockMvc.perform(multipart("/pending-activities/batch-import")
                         .file(file)
                         .with(user("user1").roles("USER")))
                 .andExpect(status().isBadRequest())
