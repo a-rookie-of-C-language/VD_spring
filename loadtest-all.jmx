@@ -1,0 +1,362 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="All Endpoints Benchmark">
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments">
+        <collectionProp name="Arguments.arguments"/>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <!-- Setup: load token from file -->
+      <SetupThreadGroup guiclass="SetupThreadGroupGui" testclass="SetupThreadGroup" testname="Setup">
+        <intProp name="ThreadGroup.num_threads">1</intProp>
+        <intProp name="ThreadGroup.ramp_time">1</intProp>
+        <stringProp name="ThreadGroup.on_sample_error">stoptestnow</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+          <stringProp name="LoopController.loops">1</stringProp>
+        </elementProp>
+      </SetupThreadGroup>
+      <hashTree>
+        <JSR223Sampler guiclass="TestBeanGUI" testclass="JSR223Sampler" testname="Load Token">
+          <stringProp name="cacheKey">true</stringProp>
+          <stringProp name="filename"></stringProp>
+          <stringProp name="parameters"></stringProp>
+          <stringProp name="script">def token = new File("D:/code/IdeaFiles/volunteerDuration/token.txt").text.trim()
+props.put("jwt_token", token)
+log.info("Token loaded OK")</stringProp>
+          <stringProp name="scriptLanguage">groovy</stringProp>
+        </JSR223Sampler>
+        <hashTree/>
+      </hashTree>
+
+      <!-- ===== 12 Thread Groups: 500 threads each, 30s ===== -->
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T1-Login">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Content-Type</stringProp><stringProp name="Header.value">application/json</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Login">
+          <stringProp name="HTTPSampler.path">/api/user/login</stringProp><stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument"><stringProp name="Argument.value">{"studentNo":"12323020420","password":"arookieofc"}</stringProp><stringProp name="Argument.metadata">=</stringProp></elementProp>
+          </collectionProp></elementProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T2-ActivitiesQuery">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Content-Type</stringProp><stringProp name="Header.value">application/json</stringProp></elementProp>
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Activities Query">
+          <stringProp name="HTTPSampler.path">/api/activities/query</stringProp><stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument"><stringProp name="Argument.value">{}</stringProp><stringProp name="Argument.metadata">=</stringProp></elementProp>
+          </collectionProp></elementProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T3-GetActivity">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Get Activity">
+          <stringProp name="HTTPSampler.path">/api/activities/31038594-6c54-4490-97a3-ec8f2dbb5f43</stringProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T4-MyActivities">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="My Activities">
+          <stringProp name="HTTPSampler.path">/api/activities/MyActivities</stringProp><stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T5-MyStatus">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="My Status">
+          <stringProp name="HTTPSampler.path">/api/activities/MyStatus</stringProp><stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T6-Dashboard">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Dashboard">
+          <stringProp name="HTTPSampler.path">/api/monitoring/dashboard</stringProp><stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T7-Overview">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Overview">
+          <stringProp name="HTTPSampler.path">/api/monitoring/overview</stringProp><stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T8-UserStats">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Content-Type</stringProp><stringProp name="Header.value">application/json</stringProp></elementProp>
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="User Stats">
+          <stringProp name="HTTPSampler.path">/api/monitoring/user-stats</stringProp><stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument"><stringProp name="Argument.value">{}</stringProp><stringProp name="Argument.metadata">=</stringProp></elementProp>
+          </collectionProp></elementProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T9-PendingQuery">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Content-Type</stringProp><stringProp name="Header.value">application/json</stringProp></elementProp>
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Pending Query">
+          <stringProp name="HTTPSampler.path">/api/pending-activities/query</stringProp><stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments">
+            <elementProp name="" elementType="HTTPArgument"><stringProp name="Argument.value">{}</stringProp><stringProp name="Argument.metadata">=</stringProp></elementProp>
+          </collectionProp></elementProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T10-MyRequests">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="My Requests">
+          <stringProp name="HTTPSampler.path">/api/activities/my_requests</stringProp><stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T11-Suggestions">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="My Suggestions">
+          <stringProp name="HTTPSampler.path">/api/suggestions/my</stringProp><stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="T12-VerifyToken">
+        <intProp name="ThreadGroup.num_threads">500</intProp><intProp name="ThreadGroup.ramp_time">5</intProp>
+        <intProp name="ThreadGroup.duration">30</intProp><boolProp name="ThreadGroup.scheduler">true</boolProp>
+        <stringProp name="ThreadGroup.duration">30</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+          <boolProp name="LoopController.continue_forever">false</boolProp><stringProp name="LoopController.loops">-1</stringProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Defaults">
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments"><collectionProp name="Arguments.arguments"/></elementProp>
+          <stringProp name="HTTPSampler.domain">localhost</stringProp><stringProp name="HTTPSampler.port">8080</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+        </ConfigTestElement><hashTree/>
+        <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="H">
+          <collectionProp name="HeaderManager.headers">
+            <elementProp name="" elementType="Header"><stringProp name="Header.name">Authorization</stringProp><stringProp name="Header.value">Bearer ${__property(jwt_token)}</stringProp></elementProp>
+          </collectionProp>
+        </HeaderManager><hashTree/>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Verify Token">
+          <stringProp name="HTTPSampler.path">/api/user/verifyToken</stringProp><stringProp name="HTTPSampler.method">GET</stringProp>
+        </HTTPSamplerProxy><hashTree/>
+      </hashTree>
+
+      <!-- Results -->
+      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="Summary">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp><name>saveConfig</name><value class="SampleSaveConfiguration">
+          <time>true</time><latency>true</latency><timestamp>true</timestamp><success>true</success>
+          <label>true</label><code>true</code><message>true</message><threadName>true</threadName>
+          <dataType>true</dataType><encoding>false</encoding><assertions>true</assertions>
+          <subresults>true</subresults><responseData>false</responseData><samplerData>false</samplerData>
+          <xml>false</xml><fieldNames>true</fieldNames><responseHeaders>false</responseHeaders>
+          <requestHeaders>false</requestHeaders><responseDataOnError>false</responseDataOnError>
+          <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+          <assertionsResultsToSave>0</assertionsResultsToSave><bytes>true</bytes>
+          <sentBytes>true</sentBytes><url>true</url><threadCounts>true</threadCounts>
+          <sampleCount>true</sampleCount><connectTime>true</connectTime>
+        </value></objProp>
+        <stringProp name="filename">/d/code/IdeaFiles/volunteerDuration/loadtest-results.jtl</stringProp>
+      </ResultCollector><hashTree/>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>
