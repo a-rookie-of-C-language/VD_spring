@@ -20,6 +20,7 @@ Thumbs.db
 
 # Secrets (don't commit real credentials)
 application-local.yml
+token.txt
 
 # Docker
 .env
@@ -41,4 +42,4 @@ dist-bundle/
 *.dump
 *.log
 *.exe
-
+/perf
