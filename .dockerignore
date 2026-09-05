@@ -1,0 +1,15 @@
+target
+temp
+uploads
+perf
+loadtest-report
+loadtest*.jmx
+loadtest-results.jtl
+app.log
+hs_err_pid*.log
+erl_crash.dump
+dist-bundle.zip
+.git
+.idea
+.claude
+.agent
