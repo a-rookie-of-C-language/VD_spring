@@ -7,7 +7,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.core.Message;
 import org.springframework.amqp.core.MessageProperties;
-import org.springframework.amqp.rabbit.connection.CorrelationData;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -20,14 +19,10 @@ import site.arookieofc.service.BO.ActivityStatus;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZonedDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 @Service
 @RequiredArgsConstructor
@@ -60,19 +55,21 @@ public class ActivityStatusTaskService {
                 .executeAt(executeAt)
                 .status("PENDING")
                 .attempt(0)
+                .nextRetryAt(executeAt)
                 .createdAt(now)
                 .updatedAt(now)
                 .build();
 
         taskMapper.insert(task);
-        dispatch(task);
+        if (!executeAt.isAfter(now)) {
+            dispatch(task);
+        }
     }
 
     @Scheduled(fixedDelay = 30000)
     public void recoverPendingTasks() {
         LocalDateTime now = LocalDateTime.now(ZONE);
-        LocalDateTime sentBefore = now.minusMinutes(10);
-        List<ActivityStatusTask> tasks = taskMapper.listDispatchable(DISPATCH_BATCH_SIZE, now, sentBefore);
+        List<ActivityStatusTask> tasks = taskMapper.listDispatchable(DISPATCH_BATCH_SIZE, now, now.minusMinutes(10));
         if (tasks.isEmpty()) {
             return;
         }
@@ -170,30 +167,19 @@ public class ActivityStatusTaskService {
             );
 
             byte[] body = objectMapper.writeValueAsBytes(payload);
-            LocalDateTime now = LocalDateTime.now(ZONE);
-            long delayMs = computeDelayMs(now, task.getExecuteAt());
 
             MessageProperties props = new MessageProperties();
             props.setContentType(MessageProperties.CONTENT_TYPE_JSON);
-            props.setHeader("x-delay", delayMs);
             props.setHeader("x-event-id", task.getEventId());
             props.setHeader("x-attempt", nextAttempt);
             Message message = new Message(body, props);
 
-            CorrelationData correlationData = new CorrelationData(task.getEventId());
-            rabbitTemplate.send(RabbitConfig.DELAY_EXCHANGE, RabbitConfig.DELAY_ROUTING_KEY, message, correlationData);
-
-            CorrelationData.Confirm confirm = correlationData.getFuture().get(3, TimeUnit.SECONDS);
-            if (confirm != null && confirm.isAck()) {
-                taskMapper.markSent(task.getEventId(), LocalDateTime.now(ZONE));
-            } else {
-                String reason = confirm == null ? "publisher confirm missing" : normalizeError(confirm.getReason());
-                markPublishFailed(task.getEventId(), nextAttempt, reason);
-            }
+            rabbitTemplate.send(RabbitConfig.UPDATE_EXCHANGE, RabbitConfig.UPDATE_ROUTING_KEY, message);
+            taskMapper.markSent(task.getEventId(), LocalDateTime.now(ZONE));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             markPublishFailed(task.getEventId(), nextAttempt, e.getMessage());
-        } catch (JsonProcessingException | AmqpException | ExecutionException | TimeoutException e) {
+        } catch (JsonProcessingException | AmqpException e) {
             markPublishFailed(task.getEventId(), nextAttempt, e.getMessage());
         }
     }
@@ -223,13 +209,6 @@ public class ActivityStatusTaskService {
         taskMapper.markFailed(eventId, attempt, normalizeError(reason), nextRetryAt, now);
         log.warn("Activity status task publish failed. eventId={}, attempt={}, nextRetryAt={}, reason={}",
                 eventId, attempt, nextRetryAt, normalizeError(reason));
-    }
-
-    private long computeDelayMs(LocalDateTime now, LocalDateTime executeAt) {
-        ZonedDateTime n = now.atZone(ZONE);
-        ZonedDateTime t = executeAt.atZone(ZONE);
-        long delayMs = Duration.between(n, t).toMillis();
-        return Math.max(0, delayMs);
     }
 
     private long backoffSeconds(int attempt) {

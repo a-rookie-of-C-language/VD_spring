@@ -5,7 +5,6 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
-import org.springframework.amqp.core.CustomExchange;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.context.annotation.Bean;
@@ -16,7 +15,6 @@ import java.util.Map;
 
 @Configuration
 public class RabbitConfig {
-    public static final String DELAY_EXCHANGE = "activity.delayed.exchange";
     public static final String UPDATE_EXCHANGE = "activity.update.exchange";
     public static final String UPDATE_RETRY_EXCHANGE = "activity.update.retry.exchange";
     public static final String UPDATE_DLX_EXCHANGE = "activity.update.dlx.exchange";
@@ -31,13 +29,6 @@ public class RabbitConfig {
     public static final String MONITORING_EXCHANGE = "monitoring.exchange";
     public static final String MONITORING_CLEANUP_QUEUE = "monitoring.cleanup.queue";
     public static final String MONITORING_CLEANUP_ROUTING_KEY = "monitoring.cleanup";
-
-    @Bean
-    public CustomExchange delayExchange() {
-        Map<String, Object> args = new HashMap<>();
-        args.put("x-delayed-type", "direct");
-        return new CustomExchange(DELAY_EXCHANGE, "x-delayed-message", true, false, args);
-    }
 
     @Bean
     public DirectExchange updateExchange() {
@@ -84,11 +75,6 @@ public class RabbitConfig {
     @Bean
     public Queue monitoringCleanupQueue() {
         return new Queue(MONITORING_CLEANUP_QUEUE, true);
-    }
-
-    @Bean
-    public Binding bindDelay() {
-        return BindingBuilder.bind(updateQueue()).to(delayExchange()).with(DELAY_ROUTING_KEY).noargs();
     }
 
     @Bean

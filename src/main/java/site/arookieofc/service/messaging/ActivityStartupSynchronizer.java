@@ -1,6 +1,7 @@
 package site.arookieofc.service.messaging;
 
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -22,6 +23,7 @@ public class ActivityStartupSynchronizer {
     @Value("${app.messaging.dev-mode-trigger:false}")
     private boolean devModeTrigger;
 
+    @Autowired
     public ActivityStartupSynchronizer(ActivityMapper activityMapper,
                                        ActivityStatusTaskService activityStatusTaskService) {
         this(activityMapper, activityStatusTaskService, false);
