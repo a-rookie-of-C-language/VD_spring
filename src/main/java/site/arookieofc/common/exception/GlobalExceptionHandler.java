@@ -7,10 +7,13 @@ import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.security.access.AccessDeniedException;
 import site.arookieofc.controller.VO.Result;
 
 import jakarta.validation.ConstraintViolationException;
+import java.time.format.DateTimeParseException;
 
 @Slf4j
 @RestControllerAdvice
@@ -60,9 +63,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(Result.of(400, "INVALID_REQUEST_BODY", null));
     }
 
+    @ExceptionHandler({DateTimeParseException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<Result> handleInvalidRequestParameter(Exception e) {
+        return ResponseEntity.badRequest().body(Result.of(400, "INVALID_REQUEST_PARAMETER", null));
+    }
+
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<Result> handleAccessDenied(AccessDeniedException e) {
         return ResponseEntity.status(403).body(Result.of(403, "FORBIDDEN", null));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<Result> handleNoResourceFound(NoResourceFoundException e) {
+        return ResponseEntity.status(404).body(Result.of(404, "NOT_FOUND", null));
     }
 
     @ExceptionHandler(Exception.class)

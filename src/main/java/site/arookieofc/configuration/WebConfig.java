@@ -27,13 +27,5 @@ public class WebConfig implements WebMvcConfigurer {
                         .cachePublic()
                         .mustRevalidate())
                 .resourceChain(true);
-
-        // Configure attachments with cache control (30 days)
-        registry.addResourceHandler("/attachments/**")
-                .addResourceLocations("file:" + uploadPath + "/attachments/")
-                .setCacheControl(CacheControl.maxAge(30, TimeUnit.DAYS)
-                        .cachePublic()
-                        .mustRevalidate())
-                .resourceChain(true);
     }
 }

@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import site.arookieofc.security.JwtAuthenticationFilter;
 import site.arookieofc.controller.VO.Result;
 
+import java.io.IOException;
 import java.util.List;
 
 @Configuration
@@ -32,7 +33,7 @@ public class SecurityConfig {
     );
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -51,9 +52,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/", "/index.html", "/favicon.ico").permitAll()
                         .requestMatchers("/assets/**", "/standard/**").permitAll()
-                        .requestMatchers("/user/login", "/user/verifyToken").permitAll()
+                        .requestMatchers("/user/login", "/user/verifyToken", "/user/refresh").permitAll()
                         .requestMatchers("/ws/system-metrics").permitAll()
-                        .requestMatchers("/covers/**", "/attachments/**").permitAll()
+                        .requestMatchers("/covers/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html").permitAll()
                         .requestMatchers("/activities/*/review").hasAnyRole("ADMIN", "SUPERADMIN")
                         .requestMatchers("/pending-activities/*/approve", "/pending-activities/*/reject").hasAnyRole("ADMIN", "SUPERADMIN")
@@ -74,13 +75,13 @@ public class SecurityConfig {
         return http.build();
     }
 
-    private static void writeJsonError(HttpServletResponse response, int status, String message) {
+    private void writeJsonError(HttpServletResponse response, int status, String message) {
         response.setStatus(status);
         response.setCharacterEncoding("UTF-8");
         response.setContentType("application/json;charset=UTF-8");
         try {
-            response.getWriter().write(OBJECT_MAPPER.writeValueAsString(Result.of(status, message, null)));
-        } catch (Exception ignored) {
+            response.getWriter().write(objectMapper.writeValueAsString(Result.of(status, message, null)));
+        } catch (IOException ignored) {
             response.setStatus(status);
         }
     }

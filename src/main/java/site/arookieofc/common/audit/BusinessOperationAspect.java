@@ -1,5 +1,7 @@
 package site.arookieofc.common.audit;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.aspectj.lang.ProceedingJoinPoint;
@@ -9,11 +11,16 @@ import org.aspectj.lang.reflect.MethodSignature;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
+import org.springframework.web.context.request.RequestAttributes;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 import site.arookieofc.controller.VO.BusinessOperationLogVO;
 import site.arookieofc.controller.VO.Result;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.BusinessOperationLogService;
 
+import jakarta.servlet.http.HttpServletRequest;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -25,9 +32,11 @@ import java.util.Map;
 @Slf4j
 public class BusinessOperationAspect {
     private final BusinessOperationLogService businessOperationLogService;
+    private final ObjectMapper objectMapper;
 
     @Around("@annotation(site.arookieofc.common.audit.BusinessOperation)")
     public Object logOperation(ProceedingJoinPoint joinPoint) throws Throwable {
+        long startNs = System.nanoTime();
         MethodSignature signature = (MethodSignature) joinPoint.getSignature();
         Method method = signature.getMethod();
         BusinessOperation operation = method.getAnnotation(BusinessOperation.class);
@@ -37,9 +46,13 @@ public class BusinessOperationAspect {
 
         String operatorNo = principal != null ? principal.getStudentNo() : "anonymous";
         String operatorRole = principal != null ? principal.getRole() : "unknown";
+        String operatorIp = resolveOperatorIp();
+        String operatorUserAgent = resolveUserAgent();
+        String requestId = resolveRequestId();
 
         String targetId = extractValue(operation.targetIdParam(), argMap);
         String targetName = extractValue(operation.targetNameParam(), argMap);
+        String beforeChange = snapshot(argMap);
 
         String status = "SUCCESS";
         Object resultObj;
@@ -50,7 +63,9 @@ public class BusinessOperationAspect {
             }
         } catch (Throwable e) {
             status = "FAILED";
-            writeLog(operation, operatorNo, operatorRole, targetId, targetName, status, operation.detail() + " | exception=" + e.getClass().getSimpleName());
+            writeLog(operation, operatorNo, operatorRole, operatorIp, operatorUserAgent, requestId, targetId, targetName, status,
+                    operation.detail() + " | exception=" + e.getClass().getSimpleName(),
+                    durationMs(startNs), beforeChange, "");
             throw e;
         }
 
@@ -63,27 +78,41 @@ public class BusinessOperationAspect {
             }
         }
 
-        writeLog(operation, operatorNo, operatorRole, targetId, targetName, status, operation.detail());
+        String afterChange = resultObj instanceof Result result ? snapshot(result.getData()) : snapshot(resultObj);
+        writeLog(operation, operatorNo, operatorRole, operatorIp, operatorUserAgent, requestId, targetId, targetName, status, operation.detail(),
+                durationMs(startNs), beforeChange, afterChange);
         return resultObj;
     }
 
     private void writeLog(BusinessOperation operation,
                           String operatorNo,
                           String operatorRole,
+                          String operatorIp,
+                          String operatorUserAgent,
+                          String requestId,
                           String targetId,
                           String targetName,
                           String status,
-                          String detail) {
+                          String detail,
+                          long durationMs,
+                          String beforeChange,
+                          String afterChange) {
         BusinessOperationLogVO logVO = BusinessOperationLogVO.builder()
                 .timestamp(OffsetDateTime.now().toString())
                 .operatorStudentNo(operatorNo)
                 .operatorRole(operatorRole)
+                .operatorIp(defaultString(operatorIp))
+                .operatorUserAgent(defaultString(operatorUserAgent))
+                .requestId(defaultString(requestId))
                 .action(operation.action())
                 .targetType(operation.targetType())
                 .targetId(defaultString(targetId))
                 .targetName(defaultString(targetName))
                 .detail(defaultString(detail))
                 .status(status)
+                .durationMs(durationMs)
+                .beforeChange(defaultString(beforeChange))
+                .afterChange(defaultString(afterChange))
                 .build();
         businessOperationLogService.write(logVO);
     }
@@ -158,7 +187,7 @@ public class BusinessOperationAspect {
                 if (value != null) {
                     return String.valueOf(value);
                 }
-            } catch (Exception ignored) {
+            } catch (NoSuchMethodException | IllegalAccessException | InvocationTargetException | SecurityException ignored) {
             }
         }
         return "";
@@ -166,5 +195,71 @@ public class BusinessOperationAspect {
 
     private String defaultString(String value) {
         return value == null ? "" : value;
+    }
+
+    private String resolveOperatorIp() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes servletRequestAttributes)) {
+            return "unknown";
+        }
+
+        HttpServletRequest request = servletRequestAttributes.getRequest();
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+            String[] parts = xForwardedFor.split(",");
+            if (parts.length > 0 && !parts[0].trim().isBlank()) {
+                return parts[0].trim();
+            }
+        }
+
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isBlank()) {
+            return xRealIp.trim();
+        }
+
+        String remoteAddr = request.getRemoteAddr();
+        if (remoteAddr == null || remoteAddr.isBlank()) {
+            return "unknown";
+        }
+        return remoteAddr;
+    }
+
+    private String resolveUserAgent() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes servletRequestAttributes)) {
+            return "";
+        }
+        return defaultString(servletRequestAttributes.getRequest().getHeader("User-Agent"));
+    }
+
+    private String resolveRequestId() {
+        RequestAttributes attributes = RequestContextHolder.getRequestAttributes();
+        if (!(attributes instanceof ServletRequestAttributes servletRequestAttributes)) {
+            return "";
+        }
+        HttpServletRequest request = servletRequestAttributes.getRequest();
+        String header = request.getHeader("X-Request-ID");
+        if (header != null && !header.isBlank()) {
+            return header.trim();
+        }
+        Object attr = request.getAttribute("requestId");
+        return attr == null ? "" : String.valueOf(attr);
+    }
+
+    private long durationMs(long startNs) {
+        return Math.max(0L, (System.nanoTime() - startNs) / 1_000_000L);
+    }
+
+    private String snapshot(Object value) {
+        if (value == null) {
+            return "";
+        }
+        try {
+            String json = objectMapper.writeValueAsString(value);
+            return json.length() > 2000 ? json.substring(0, 2000) : json;
+        } catch (JsonProcessingException ignored) {
+            String text = String.valueOf(value);
+            return text.length() > 2000 ? text.substring(0, 2000) : text;
+        }
     }
 }

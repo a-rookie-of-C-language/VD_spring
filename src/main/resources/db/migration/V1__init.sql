@@ -19,11 +19,15 @@ CREATE TABLE IF NOT EXISTS activities
     enrollment_start_time DATETIME     NOT NULL,
     enrollment_end_time   DATETIME     NOT NULL,
     start_time            DATETIME     NOT NULL,
-    end_time              DATETIME     NOT NULL,
-    cover                 VARCHAR(255),
+    expected_end_time     DATETIME     NOT NULL,
+    end_time              DATETIME     NULL,
+    cover_path            VARCHAR(255),
     max_participants      INT          NOT NULL DEFAULT 0,
+    duration              DOUBLE PRECISION NULL,
     status                VARCHAR(50)  NOT NULL,
-    is_full               TINYINT(1)   NOT NULL DEFAULT 0
+    is_full               TINYINT(1)   NOT NULL DEFAULT 0,
+    imported              TINYINT(1)   NULL,
+    rejected_reason       VARCHAR(500) NULL
 );
 
 CREATE TABLE IF NOT EXISTS activity_attachments
@@ -42,7 +46,7 @@ CREATE TABLE IF NOT EXISTS activity_participants
 );
 
 
-insert into vd.activities (id, functionary, name, type, description, enrollment_start_time, enrollment_end_time, start_time, expected_end_time, cover_path, status, is_full, max_participants, duration, end_time, imported, rejected_reason)
+insert into activities (id, functionary, name, type, description, enrollment_start_time, enrollment_end_time, start_time, expected_end_time, cover_path, status, is_full, max_participants, duration, end_time, imported, rejected_reason)
 values  ('860ea40d-8442-4573-a80d-3af73688757a', '12323020421', '鸿蒙开发', 'COMMUNITY_SERVICE', '开发鸿蒙应用', '2025-11-26 00:00:00', '2025-11-26 17:30:00', '2025-11-29 00:00:00', '2025-11-30 00:00:00', '/covers/f099362a-c6b9-4f22-989a-38a7d17940df.png', 'ActivityEnded', false, 10, 0.5, null, null, null),
         ('99ee1eba-bdc0-4bf1-a731-7de2bf7bfe76', '12323020421', '12345', 'CULTURE_SERVICE', '测试', '2025-11-27 08:00:00', '2025-11-29 17:17:08', '2025-11-30 00:00:00', '2025-12-03 00:00:00', '/covers/73f4b2ee-4644-4204-b0f6-dca3d8bd5a5b.png', 'ActivityEnded', false, 13, 2, null, null, null),
         ('a2d9e052-c86c-11f0-86cf-6afcd3b45678', '12323020420', '活动01 社区服务', 'COMMUNITY_SERVICE', '社区清洁与环境美化', '2025-11-24 21:02:16', '2025-11-25 21:02:16', '2025-11-26 21:02:16', '2025-11-27 21:02:16', '/images/covers/act01.jpg', 'ActivityEnded', false, 30, 2, null, null, null),
@@ -67,7 +71,7 @@ values  ('860ea40d-8442-4573-a80d-3af73688757a', '12323020421', '鸿蒙开发', 
         ('a2fc3352-c86c-11f0-86cf-6afcd3b45678', '12323020420', '活动20 动物保护', 'ANIMAL_PROTECTION', '动物保护组织志愿服务', '2025-12-13 21:02:16', '2025-12-14 21:02:16', '2025-12-15 21:02:16', '2025-12-16 21:02:16', '/images/covers/act20.jpg', 'ActivityEnded', false, 26, 1, null, null, null),
         ('dacf373d-1167-425a-8466-8ccce14b3bbf', '12323020421', '测试', 'COMMUNITY_SERVICE', '测试', '2025-12-08 00:00:00', '2025-12-09 00:00:00', '2025-12-16 00:00:00', '2025-12-19 00:00:00', '/covers/c0fbe91d-c272-41a5-9dd0-e3d9837facd7.jpg', 'FailReview', false, 10, 0.5, null, null, null);
 
-insert into vd.activity_participants (id, activity_id, student_no)
+insert into activity_participants (id, activity_id, student_no)
 values  (7, '860ea40d-8442-4573-a80d-3af73688757a', '12323020406'),
         (6, '860ea40d-8442-4573-a80d-3af73688757a', '12323020421'),
         (11, '99ee1eba-bdc0-4bf1-a731-7de2bf7bfe76', '12323020334'),
@@ -77,9 +81,9 @@ values  (7, '860ea40d-8442-4573-a80d-3af73688757a', '12323020406'),
         (16, 'a2f86ae9-c86c-11f0-86cf-6afcd3b45678', '12323020406'),
         (13, 'dacf373d-1167-425a-8466-8ccce14b3bbf', '12323020421');
 
-insert into vd.users (student_no, username, password, role, created_at, total_hours, clazz, grade, college)
-values  ('12323020334', '高永旗', 'arookieofc', 'user', '2025-11-27 19:03:55', 100, '123230203', '2023', '两江人工智能学院'),
-        ('12323020406', '罗正', 'arookieofc', 'user', '2025-11-24 16:18:26', 0, '123230204', '2023', '两江人工智能学院'),
-        ('12323020420', '黄智哲', 'arookieofc', 'superAdmin', '2025-11-25 21:49:45', 0, '123230204', '2023', '两江人工智能学院'),
-        ('12323020421', '贺文杰', 'arookieofc', 'functionary', '2025-11-25 21:50:28', 0, '123230204', '2023', '两江人工智能学院'),
-        ('12323020422', '龚文杰', 'arookieofc', 'admin', '2025-11-25 21:50:57', 0, '123230204', '2023', '两江人工智能学院');
+insert into users (student_no, username, password, role, created_at, total_hours)
+values  ('12323020334', '高永旗', 'arookieofc', 'user', '2025-11-27 19:03:55', 100),
+        ('12323020406', '罗正', 'arookieofc', 'user', '2025-11-24 16:18:26', 0),
+        ('12323020420', '黄智哲', 'arookieofc', 'superAdmin', '2025-11-25 21:49:45', 0),
+        ('12323020421', '贺文杰', 'arookieofc', 'functionary', '2025-11-25 21:50:28', 0),
+        ('12323020422', '龚文杰', 'arookieofc', 'admin', '2025-11-25 21:50:57', 0);

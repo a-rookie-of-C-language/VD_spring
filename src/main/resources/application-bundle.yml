@@ -21,28 +21,32 @@ spring:
           cache-public: true
           must-revalidate: true
   datasource:
-    url: jdbc:mysql://localhost:3308/vd?allowPublicKeyRetrieval=TRUE&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3308/vd?allowPublicKeyRetrieval=TRUE&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
     driver-class-name: com.mysql.cj.jdbc.Driver
-    username: root
-    password: su201314
+    username: ${SPRING_DATASOURCE_USERNAME:root}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
   servlet:
     multipart:
       enabled: true
       max-file-size: 20MB
       max-request-size: 20MB
   rabbitmq:
-    host: localhost
-    port: 5673
-    username: guest
-    password: guest
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5673}
+    username: ${SPRING_RABBITMQ_USERNAME:guest}
+    password: ${SPRING_RABBITMQ_PASSWORD:guest}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
   flyway:
     enabled: true
     baseline-on-migrate: true
   mail:
-    host: smtp.163.com
-    port: 25
-    username: ergr16976258@163.com
-    password: AAXVZdBKbVgDnSbG
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:25}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
     properties:
       mail:
         smtp:
@@ -71,8 +75,9 @@ app:
     cover-path: covers
   security:
     jwt:
-      secret: hzz.arookieofc-language.Elysia.Cyrene
-      expiry-minutes: 2400
+      secret: ${JWT_SECRET:dev-only-change-me-jwt-secret-32-chars}
+      access-expiry-minutes: 15
+      refresh-expiry-minutes: 10080
   messaging:
     dev-mode-trigger: true
   logging:
@@ -86,6 +91,22 @@ app:
       host: localhost
       port: 9201
       index-pattern: volunteer-duration-*
+      business-index-prefix: volunteer-business-log
+      business-index-template: volunteer-business-log-template
+      business-ilm-policy: volunteer-business-log-ilm
+      ilm-retention-days: 30
+      business-shards: 1
+      business-replicas: 1
+      fallback-buffer-size: 2000
+      fallback-flush-batch-size: 200
+      fallback-flush-ms: 5000
+  monitoring:
+    ws:
+      max-connections: 1000
+      sample-rate: 1
+      degrade-threshold: 800
+    sse:
+      max-connections: 300
 
 mybatis:
   configuration:
@@ -96,3 +117,4 @@ logging:
   level:
     root: INFO
     site.arookieofc: INFO
+

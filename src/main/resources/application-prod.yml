@@ -19,6 +19,10 @@ spring:
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USERNAME}
     password: ${RABBITMQ_PASSWORD}
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
   flyway:
     enabled: true
     baseline-on-migrate: true
@@ -58,7 +62,31 @@ app:
   security:
     jwt:
       secret: ${JWT_SECRET}
-      expiry-minutes: ${JWT_EXPIRY_MINUTES:2400}
+      access-expiry-minutes: ${JWT_ACCESS_EXPIRY_MINUTES:15}
+      refresh-expiry-minutes: ${JWT_REFRESH_EXPIRY_MINUTES:10080}
   messaging:
     # Disable dev-mode in production
     dev-mode-trigger: false
+  logging:
+    es:
+      scheme: ${LOG_ES_SCHEME:http}
+      host: ${LOG_ES_HOST:localhost}
+      port: ${LOG_ES_PORT:9200}
+      index-pattern: ${LOG_ES_INDEX_PATTERN:volunteer-duration-*}
+      business-index-prefix: ${LOG_ES_BUSINESS_INDEX_PREFIX:volunteer-business-log}
+      business-index-template: ${LOG_ES_BUSINESS_INDEX_TEMPLATE:volunteer-business-log-template}
+      business-ilm-policy: ${LOG_ES_BUSINESS_ILM_POLICY:volunteer-business-log-ilm}
+      ilm-retention-days: ${LOG_ES_ILM_RETENTION_DAYS:30}
+      business-shards: ${LOG_ES_BUSINESS_SHARDS:1}
+      business-replicas: ${LOG_ES_BUSINESS_REPLICAS:1}
+      fallback-buffer-size: ${LOG_ES_FALLBACK_BUFFER_SIZE:5000}
+      fallback-flush-batch-size: ${LOG_ES_FALLBACK_FLUSH_BATCH_SIZE:300}
+      fallback-flush-ms: ${LOG_ES_FALLBACK_FLUSH_MS:5000}
+  monitoring:
+    ws:
+      max-connections: ${MONITOR_WS_MAX_CONNECTIONS:2000}
+      sample-rate: ${MONITOR_WS_SAMPLE_RATE:1}
+      degrade-threshold: ${MONITOR_WS_DEGRADE_THRESHOLD:1500}
+    sse:
+      max-connections: ${MONITOR_SSE_MAX_CONNECTIONS:500}
+

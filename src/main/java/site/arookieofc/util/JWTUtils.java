@@ -2,14 +2,17 @@ package site.arookieofc.util;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.ExpiredJwtException;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.security.SignatureException;
+import jakarta.annotation.PostConstruct;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
-import jakarta.annotation.PostConstruct;
+
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
@@ -18,33 +21,66 @@ import java.util.Map;
 
 @Component
 public class JWTUtils {
-    private long expiryMinutes;
+    public static final String CLAIM_TYPE = "typ";
+    public static final String CLAIM_TOKEN_VERSION = "token_version";
+    public static final String TYPE_ACCESS = "access";
+    public static final String TYPE_REFRESH = "refresh";
+
     private byte[] secretBytes;
 
-    @Value("${app.security.jwt.expiry-minutes:120}")
-    private long expiryMinutesConfig;
+    @Value("${app.security.jwt.access-expiry-minutes:15}")
+    private long accessExpiryMinutes;
+
+    @Value("${app.security.jwt.refresh-expiry-minutes:10080}")
+    private long refreshExpiryMinutes;
+
     @Value("${app.security.jwt.secret:}")
     private String jwtSecretConfig;
 
+    public JWTUtils() {
+    }
+
+    JWTUtils(String jwtSecretConfig, long accessExpiryMinutes, long refreshExpiryMinutes) {
+        this.jwtSecretConfig = jwtSecretConfig;
+        this.accessExpiryMinutes = accessExpiryMinutes;
+        this.refreshExpiryMinutes = refreshExpiryMinutes;
+        init();
+    }
+
     @PostConstruct
     private void init() {
-        expiryMinutes = expiryMinutesConfig;
-        if (jwtSecretConfig != null && jwtSecretConfig.length() >= 32) {
-            secretBytes = jwtSecretConfig.getBytes();
-        } else {
-            throw new IllegalStateException(
-                    "JWT secret not configured or too short (>=32 chars). Set app.security.jwt.secret");
+        if (jwtSecretConfig == null || jwtSecretConfig.length() < 32) {
+            throw new IllegalStateException("JWT secret not configured or too short (>=32 chars).");
         }
+        secretBytes = jwtSecretConfig.getBytes(StandardCharsets.UTF_8);
     }
 
     public String generateToken(String subject) {
-        return generateToken(subject, null);
+        return generateAccessToken(subject, null, 0);
     }
 
     public String generateToken(String subject, Map<String, Object> claims) {
+        return generateAccessToken(subject, claims, 0);
+    }
+
+    public String generateAccessToken(String subject, Map<String, Object> claims, int tokenVersion) {
+        return generateTypedToken(subject, claims, tokenVersion, TYPE_ACCESS, accessExpiryMinutes);
+    }
+
+    public String generateRefreshToken(String subject, Map<String, Object> claims, int tokenVersion) {
+        return generateTypedToken(subject, claims, tokenVersion, TYPE_REFRESH, refreshExpiryMinutes);
+    }
+
+    private String generateTypedToken(String subject,
+                                      Map<String, Object> claims,
+                                      int tokenVersion,
+                                      String type,
+                                      long expiryMinutes) {
         Instant now = Instant.now();
         Instant exp = now.plus(expiryMinutes, ChronoUnit.MINUTES);
         Map<String, Object> payload = claims == null ? new HashMap<>() : new HashMap<>(claims);
+        payload.put(CLAIM_TYPE, type);
+        payload.put(CLAIM_TOKEN_VERSION, tokenVersion);
         return Jwts.builder()
                 .setClaims(payload)
                 .setSubject(subject)
@@ -62,29 +98,12 @@ public class JWTUtils {
                 .getBody();
     }
 
-    public String getSubject(String token) {
-        return parseToken(token).getSubject();
-    }
-
-    public boolean isExpired(String token) {
-        Date exp = parseToken(token).getExpiration();
-        return exp != null && exp.before(new Date());
-    }
-
-    /**
-     * 安全解析Token，返回包含详细错误信息的结果
-     * 前端可根据message字段获取具体的错误原因
-     */
     public TokenParseResult parseTokenSafe(String token) {
         if (token == null || token.trim().isEmpty()) {
             return TokenParseResult.empty();
         }
         try {
-            Claims claims = Jwts.parserBuilder()
-                    .setSigningKey(Keys.hmacShaKeyFor(secretBytes))
-                    .build()
-                    .parseClaimsJws(token)
-                    .getBody();
+            Claims claims = parseToken(token);
             return TokenParseResult.success(claims);
         } catch (ExpiredJwtException e) {
             return TokenParseResult.expired();
@@ -92,8 +111,33 @@ public class JWTUtils {
             return TokenParseResult.malformed();
         } catch (SignatureException e) {
             return TokenParseResult.signatureInvalid();
-        } catch (Exception e) {
+        } catch (JwtException e) {
             return TokenParseResult.invalid();
         }
+    }
+
+    public boolean isTokenType(Claims claims, String expectedType) {
+        if (claims == null || expectedType == null) {
+            return false;
+        }
+        String tokenType = claims.get(CLAIM_TYPE, String.class);
+        return expectedType.equalsIgnoreCase(tokenType);
+    }
+
+    public int getTokenVersion(Claims claims) {
+        if (claims == null) {
+            return -1;
+        }
+        Object value = claims.get(CLAIM_TOKEN_VERSION);
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        if (value instanceof String stringValue) {
+            try {
+                return Integer.parseInt(stringValue);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return -1;
     }
 }
