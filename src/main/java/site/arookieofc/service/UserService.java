@@ -30,6 +30,14 @@ public class UserService {
         return Optional.of(user.toUserDTO());
     }
 
+    public Optional<User> getUserEntityByStudentNo(String studentNo) {
+        return Optional.ofNullable(userMapper.getUserByStudentNo(studentNo));
+    }
+
+    public int incrementTokenVersion(String studentNo) {
+        return userMapper.incrementTokenVersion(studentNo);
+    }
+
     public List<UserDTO> listAllUsers() {
         return userMapper.listAll().stream()
                 .map(User::toUserDTO)

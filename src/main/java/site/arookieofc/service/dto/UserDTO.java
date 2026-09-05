@@ -11,6 +11,7 @@ public class UserDTO {
     private String studentNo;
     private String username;
     private String password;
+    private Integer tokenVersion;
     private Role role;
     private Double totalHours;
     private OffsetDateTime createdAt;

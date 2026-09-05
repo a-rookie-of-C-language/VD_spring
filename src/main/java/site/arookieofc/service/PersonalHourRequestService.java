@@ -2,8 +2,10 @@ package site.arookieofc.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.arookieofc.common.cache.CacheInvalidateEvent;
 import site.arookieofc.common.exception.BusinessException;
 import org.springframework.web.multipart.MultipartFile;
 import site.arookieofc.dao.entity.PersonalHourRequest;
@@ -13,13 +15,12 @@ import site.arookieofc.dao.mapper.UserMapper;
 import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.service.BO.ActivityType;
 import site.arookieofc.service.dto.PersonalHourRequestDTO;
+import site.arookieofc.util.PaginationUtils;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -33,6 +34,7 @@ public class PersonalHourRequestService {
     private final UserMapper userMapper;
     private final FileUploadService fileUploadService;
     private final VolunteerHourGrantService volunteerHourGrantService;
+    private final ApplicationEventPublisher eventPublisher;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     /**
@@ -43,27 +45,13 @@ public class PersonalHourRequestService {
         // Validate applicant exists
         User applicant = userMapper.getUserByStudentNo(applicantStudentNo);
         if (applicant == null) {
-            throw new IllegalArgumentException("APPLICANT_NOT_FOUND");
+            throw BusinessException.badRequest("APPLICANT_NOT_FOUND");
         }
 
         // Generate ID
         String id = UUID.randomUUID().toString();
 
-        // Upload attachments if provided
-        List<String> attachmentPaths = new ArrayList<>();
-        if (dto.getFiles() != null && !dto.getFiles().isEmpty()) {
-            for (MultipartFile file : dto.getFiles()) {
-                if (file != null && !file.isEmpty()) {
-                    try {
-                        String path = uploadAttachment(file);
-                        attachmentPaths.add(path);
-                    } catch (IOException e) {
-                        log.error("Failed to upload attachment", e);
-                        throw new IllegalArgumentException("Failed to upload attachment: " + e.getMessage());
-                    }
-                }
-            }
-        }
+        List<String> attachmentPaths = collectAttachmentPaths(dto.getFiles());
 
         // Create entity
         PersonalHourRequest entity = PersonalHourRequest.builder()
@@ -119,33 +107,16 @@ public class PersonalHourRequestService {
      * List requests by applicant (for user's my_requests)
      */
     public List<PersonalHourRequestDTO> listByApplicant(String applicantStudentNo) {
-        return requestMapper.listByApplicant(applicantStudentNo).stream()
-                .map(entity -> {
-                    PersonalHourRequestDTO dto = PersonalHourRequestDTO.fromEntity(entity, ZONE);
-                    User applicant = userMapper.getUserByStudentNo(entity.getApplicantStudentNo());
-                    if (applicant != null) {
-                        dto.setApplicantName(applicant.getUsername());
-                    }
-                    return dto;
-                })
-                .collect(Collectors.toList());
+        return enrichWithNames(requestMapper.listByApplicant(applicantStudentNo));
     }
 
     /**
      * List pending requests (for admin review)
      */
     public List<PersonalHourRequestDTO> listPendingRequests(int page, int pageSize) {
-        int offset = Math.max(0, (page - 1) * pageSize);
-        return requestMapper.listPaged(null, null, ActivityStatus.UnderReview, null, pageSize, offset).stream()
-                .map(entity -> {
-                    PersonalHourRequestDTO dto = PersonalHourRequestDTO.fromEntity(entity, ZONE);
-                    User applicant = userMapper.getUserByStudentNo(entity.getApplicantStudentNo());
-                    if (applicant != null) {
-                        dto.setApplicantName(applicant.getUsername());
-                    }
-                    return dto;
-                })
-                .collect(Collectors.toList());
+        int safePageSize = PaginationUtils.normalizePageSize(pageSize);
+        int offset = PaginationUtils.offset(page, safePageSize);
+        return enrichWithNames(requestMapper.listPaged(null, null, ActivityStatus.UnderReview, null, safePageSize, offset));
     }
 
     /**
@@ -161,17 +132,9 @@ public class PersonalHourRequestService {
     public List<PersonalHourRequestDTO> listRequestsPaged(
             String applicantStudentNo, ActivityType type, ActivityStatus status, String name,
             int page, int pageSize) {
-        int offset = Math.max(0, (page - 1) * pageSize);
-        return requestMapper.listPaged(applicantStudentNo, type, status, name, pageSize, offset).stream()
-                .map(entity -> {
-                    PersonalHourRequestDTO dto = PersonalHourRequestDTO.fromEntity(entity, ZONE);
-                    User applicant = userMapper.getUserByStudentNo(entity.getApplicantStudentNo());
-                    if (applicant != null) {
-                        dto.setApplicantName(applicant.getUsername());
-                    }
-                    return dto;
-                })
-                .collect(Collectors.toList());
+        int safePageSize = PaginationUtils.normalizePageSize(pageSize);
+        int offset = PaginationUtils.offset(page, safePageSize);
+        return enrichWithNames(requestMapper.listPaged(applicantStudentNo, type, status, name, safePageSize, offset));
     }
 
     /**
@@ -193,6 +156,9 @@ public class PersonalHourRequestService {
 
         if (entity.getStatus() != ActivityStatus.UnderReview) {
             throw BusinessException.badRequest("ALREADY_REVIEWED");
+        }
+        if (!approved && (reason == null || reason.trim().isEmpty())) {
+            throw BusinessException.badRequest("REASON_REQUIRED");
         }
 
         ActivityStatus newStatus = approved ? ActivityStatus.ActivityEnded : ActivityStatus.FailReview;
@@ -224,6 +190,7 @@ public class PersonalHourRequestService {
         if (applicant != null) {
             dto.setApplicantName(applicant.getUsername());
         }
+        eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.MONITORING, "review-hour-request"));
         return dto;
     }
 
@@ -261,18 +228,44 @@ public class PersonalHourRequestService {
     }
 
     /**
-     * Upload an attachment file
-     */
-    private String uploadAttachment(MultipartFile file) throws IOException {
-        // Reuse the cover image upload logic, but with different path
-        return fileUploadService.uploadAttachment(file);
-    }
-
-    /**
      * Delete an attachment file
      */
     private boolean deleteAttachment(String relativePath) {
-        return fileUploadService.deleteCoverImage(relativePath);
+        return fileUploadService.deleteAttachment(relativePath);
+    }
+
+    private List<String> collectAttachmentPaths(List<MultipartFile> files) {
+        if (files == null || files.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<String> paths = new ArrayList<>();
+        for (MultipartFile file : files) {
+            if (file == null || file.isEmpty()) {
+                continue;
+            }
+            try {
+                paths.add(fileUploadService.uploadAttachment(file));
+            } catch (IOException e) {
+                log.error("Failed to upload attachment", e);
+                throw new IllegalArgumentException("Failed to upload attachment: " + e.getMessage(), e);
+            }
+        }
+        return paths;
+    }
+
+    /**
+     * Batch-load users (1 query) and enrich DTOs with applicant names.
+     * Replaces N+1 per-row getUserByStudentNo calls.
+     */
+    private List<PersonalHourRequestDTO> enrichWithNames(List<PersonalHourRequest> entities) {
+        if (entities.isEmpty()) return java.util.Collections.emptyList();
+        List<String> studentNos = entities.stream().map(PersonalHourRequest::getApplicantStudentNo).distinct().collect(Collectors.toList());
+        Map<String, String> nameMap = userMapper.listByStudentNos(studentNos).stream()
+                .collect(Collectors.toMap(User::getStudentNo, User::getUsername, (a, b) -> a));
+        return entities.stream().map(entity -> {
+            PersonalHourRequestDTO dto = PersonalHourRequestDTO.fromEntity(entity, ZONE);
+            dto.setApplicantName(nameMap.get(entity.getApplicantStudentNo()));
+            return dto;
+        }).collect(Collectors.toList());
     }
 }
-

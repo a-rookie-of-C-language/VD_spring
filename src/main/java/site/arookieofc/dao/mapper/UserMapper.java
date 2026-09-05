@@ -9,9 +9,11 @@ import java.util.List;
 @Mapper
 public interface UserMapper {
     User getUserByStudentNo(@Param("studentNo") String studentNo);
+    List<User> listByStudentNos(@Param("studentNos") List<String> studentNos);
     List<User> listAll();
     int updateTotalHours(@Param("studentNo") String studentNo, @Param("totalHours") Double totalHours);
     int incrementTotalHours(@Param("studentNo") String studentNo, @Param("delta") Double delta);
     int insertUser(User user);
     void updatePassword(@Param("studentNo") String studentNo, @Param("password") String password);
+    int incrementTokenVersion(@Param("studentNo") String studentNo);
 }

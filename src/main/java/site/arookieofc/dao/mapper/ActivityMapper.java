@@ -12,6 +12,10 @@ import java.util.List;
 public interface ActivityMapper {
     Activity getById(@Param("id") String id);
 
+    Activity getByIdBase(@Param("id") String id);
+
+    Activity selectForUpdate(@Param("id") String id);
+
     List<Activity> listAll();
 
     /**
@@ -77,6 +81,18 @@ public interface ActivityMapper {
                              @Param("pageSize") int pageSize,
                              @Param("offset") int offset);
 
+    List<Activity> listByCursor(@Param("type") ActivityType type,
+                                @Param("status") ActivityStatus status,
+                                @Param("functionary") String functionary,
+                                @Param("name") String name,
+                                @Param("startFrom") java.time.LocalDateTime startFrom,
+                                @Param("startTo") java.time.LocalDateTime startTo,
+                                @Param("isFull") Boolean isFull,
+                                @Param("excludeHidden") Boolean excludeHidden,
+                                @Param("cursorStartTime") java.time.LocalDateTime cursorStartTime,
+                                @Param("cursorId") String cursorId,
+                                @Param("pageSize") int pageSize);
+
     List<Activity> getActivitiesByStudentNo(@Param("studentNo") String studentNo);
     
     /**
@@ -86,7 +102,7 @@ public interface ActivityMapper {
     List<java.util.Map<String, Object>> countByType();
 
     /**
-     * Get activity by exact name
+     * Get activity id by exact name
      */
-    Activity getByName(@Param("name") String name);
+    String getIdByName(@Param("name") String name);
 }

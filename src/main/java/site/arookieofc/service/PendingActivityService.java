@@ -2,7 +2,10 @@ package site.arookieofc.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+import site.arookieofc.common.cache.CacheInvalidateEvent;
 import org.springframework.transaction.annotation.Transactional;
 import site.arookieofc.dao.entity.Activity;
 import site.arookieofc.dao.entity.PendingActivity;
@@ -14,6 +17,7 @@ import site.arookieofc.service.BO.ActivityType;
 import site.arookieofc.service.dto.ActivityImportDTO;
 import site.arookieofc.service.dto.PendingActivityDTO;
 import site.arookieofc.common.exception.BusinessException;
+import site.arookieofc.util.PaginationUtils;
 
 import java.io.IOException;
 import java.time.ZoneId;
@@ -30,6 +34,7 @@ public class PendingActivityService {
     private final FileUploadService fileUploadService;
     private final ExcelParserService excelParserService;
     private final VolunteerHourGrantService volunteerHourGrantService;
+    private final ApplicationEventPublisher eventPublisher;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
 
     @Transactional
@@ -49,32 +54,20 @@ public class PendingActivityService {
                 allParticipants.addAll(excelParticipants);
             } catch (IOException e) {
                 log.error("Failed to parse Excel file", e);
-                throw new IllegalArgumentException("Failed to parse Excel file: " + e.getMessage());
+                throw new IllegalArgumentException("Failed to parse Excel file: " + e.getMessage(), e);
             }
         }
 
-        // Remove duplicates
-        allParticipants = allParticipants.stream()
-                .distinct()
-                .collect(Collectors.toList());
+        allParticipants = normalizeParticipants(allParticipants);
 
         // Validate all participants exist
         for (String studentNo : allParticipants) {
             if (userMapper.getUserByStudentNo(studentNo) == null) {
-                throw new IllegalArgumentException("User not found: " + studentNo);
+                throw BusinessException.badRequest("PARTICIPANT_NOT_FOUND");
             }
         }
 
-        // Upload cover file if provided
-        String coverPath = null;
-        if (dto.getCoverFile() != null && !dto.getCoverFile().isEmpty()) {
-            try {
-                coverPath = fileUploadService.uploadCoverImage(dto.getCoverFile());
-            } catch (Exception e) {
-                log.error("Failed to upload cover image", e);
-                throw new IllegalArgumentException("Failed to upload cover image: " + e.getMessage());
-            }
-        }
+        String coverPath = uploadCoverIfPresent(dto);
 
         String activityId = UUID.randomUUID().toString();
 
@@ -134,6 +127,7 @@ public class PendingActivityService {
                     .endTime(dto.getEndTime().atZoneSameInstant(ZONE).toLocalDateTime())
                     .coverPath(coverPath)
                     .submittedBy(submittedBy)
+                    .status(ActivityStatus.UnderReview)
                     .build();
 
             pendingActivityMapper.insert(pendingActivity);
@@ -151,6 +145,31 @@ public class PendingActivityService {
             log.info("Functionary submitted pending activity: {}", activityId);
         }
         return activityId;
+    }
+
+    private List<String> normalizeParticipants(List<String> participants) {
+        if (participants == null || participants.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return participants.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(studentNo -> !studentNo.isEmpty())
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private String uploadCoverIfPresent(ActivityImportDTO dto) {
+        MultipartFile coverFile = dto.getCoverFile();
+        if (coverFile == null || coverFile.isEmpty()) {
+            return null;
+        }
+        try {
+            return fileUploadService.uploadCoverImage(coverFile);
+        } catch (IOException | IllegalArgumentException e) {
+            log.error("Failed to upload cover image", e);
+            throw new IllegalArgumentException("Failed to upload cover image: " + e.getMessage(), e);
+        }
     }
 
     public PendingActivityDTO getPendingActivityById(String id) {
@@ -183,8 +202,9 @@ public class PendingActivityService {
     public List<PendingActivityDTO> listPendingActivitiesPaged(
             ActivityType type, String functionary, String name, String submittedBy,
             int page, int pageSize) {
-        int offset = Math.max(0, (page - 1) * pageSize);
-        return pendingActivityMapper.listPaged(type, functionary, name, submittedBy, pageSize, offset).stream()
+        int safePageSize = PaginationUtils.normalizePageSize(pageSize);
+        int offset = PaginationUtils.offset(page, safePageSize);
+        return pendingActivityMapper.listPaged(type, functionary, name, submittedBy, safePageSize, offset).stream()
                 .map(entity -> {
                     PendingActivityDTO dto = PendingActivityDTO.fromEntity(entity, ZONE);
                     if (dto.getCoverPath() != null && !dto.getCoverPath().isEmpty()) {
@@ -262,6 +282,7 @@ public class PendingActivityService {
         // Delete pending activity
         deletePendingActivity(id);
 
+        eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.ALL, "approve-pending"));
         log.info("Approved pending activity: {} by reviewer: {}", id, reviewerStudentNo);
         return id;
     }

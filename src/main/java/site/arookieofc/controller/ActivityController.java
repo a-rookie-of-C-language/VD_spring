@@ -19,14 +19,14 @@ import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.service.BO.ActivityType;
 import site.arookieofc.service.dto.ActivityDTO;
 import site.arookieofc.service.dto.ActivityImportDTO;
-import site.arookieofc.service.dto.UserDTO;
+import site.arookieofc.util.PaginationUtils;
 
 import org.apache.commons.io.FilenameUtils;
+import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 @RequiredArgsConstructor
 @RestController
@@ -51,18 +51,22 @@ public class ActivityController {
             queryVO = ActivityQueryVO.builder().build();
         }
 
-        int page = queryVO.getPage() != null ? queryVO.getPage() : 1;
-        int pageSize = queryVO.getPageSize() != null ? queryVO.getPageSize() : 10;
+        int page = PaginationUtils.normalizePage(queryVO.getPage());
+        int pageSize = PaginationUtils.normalizePageSize(queryVO.getPageSize());
         ActivityType type = queryVO.getType();
         ActivityStatus status = queryVO.getStatus();
         String functionary = queryVO.getFunctionary();
         String name = queryVO.getName();
         String startFrom = queryVO.getStartFrom();
         String startTo = queryVO.getStartTo();
+        String cursorStartTime = queryVO.getCursorStartTime();
+        String cursorId = queryVO.getCursorId();
         Boolean isFull = queryVO.getIsFull();
 
         OffsetDateTime sf = startFrom == null || startFrom.isEmpty() ? null : OffsetDateTime.parse(startFrom);
         OffsetDateTime st = startTo == null || startTo.isEmpty() ? null : OffsetDateTime.parse(startTo);
+        OffsetDateTime cursorTime = cursorStartTime == null || cursorStartTime.isEmpty() ? null : OffsetDateTime.parse(cursorStartTime);
+        boolean useCursor = cursorTime != null && cursorId != null && !cursorId.isBlank();
 
         String role = principal != null ? principal.getRole() : null;
         String studentNo = principal != null ? principal.getStudentNo() : null;
@@ -71,19 +75,40 @@ public class ActivityController {
 
         int total = useAll ? activityService.countActivitiesAll(type, status, functionary, name, sf, st, isFull)
                 : activityService.countActivities(type, status, functionary, name, sf, st, isFull);
+        int querySize = useCursor ? pageSize + 1 : pageSize;
         List<ActivityDTO> dtos = useAll
-                ? activityService.listActivitiesPagedAll(type, status, functionary, name, sf, st, isFull, page, pageSize)
-                : activityService.listActivitiesPaged(type, status, functionary, name, sf, st, isFull, page, pageSize);
+                ? (useCursor
+                ? activityService.listActivitiesByCursorAll(type, status, functionary, name, sf, st, isFull, cursorTime, cursorId, querySize)
+                : activityService.listActivitiesPagedAll(type, status, functionary, name, sf, st, isFull, page, querySize))
+                : (useCursor
+                ? activityService.listActivitiesByCursor(type, status, functionary, name, sf, st, isFull, cursorTime, cursorId, querySize)
+                : activityService.listActivitiesPaged(type, status, functionary, name, sf, st, isFull, page, querySize));
+
+        boolean hasMore = dtos.size() > pageSize;
+        if (hasMore) {
+            dtos = dtos.subList(0, pageSize);
+        }
 
         List<ActivityVO> items = dtos.stream()
                 .map(ActivityVO::fromDTO)
                 .collect(java.util.stream.Collectors.toList());
+
+        String nextCursorStartTime = null;
+        String nextCursorId = null;
+        if (hasMore && !dtos.isEmpty()) {
+            ActivityDTO last = dtos.get(dtos.size() - 1);
+            nextCursorStartTime = last.getStartTime() == null ? null : last.getStartTime().toString();
+            nextCursorId = last.getId();
+        }
 
         ActivityPageVO data = ActivityPageVO.builder()
                 .items(items)
                 .total(total)
                 .page(page)
                 .pageSize(pageSize)
+                .hasMore(hasMore)
+                .nextCursorStartTime(nextCursorStartTime)
+                .nextCursorId(nextCursorId)
                 .build();
 
         return Result.success(data);
@@ -94,12 +119,13 @@ public class ActivityController {
     @BusinessOperation(action = "发布活动", targetType = "activity", detail = "负责人发布活动")
     public Result create(@AuthenticationPrincipal UserPrincipal principal,
                          @ModelAttribute ActivityDTO dto) {
+        String studentNo = AuthorizationGuards.requireStudentNo(principal);
         String role = principal.getRole();
         boolean canCreate = "functionary".equals(role) || AuthorizationGuards.isAdmin(principal);
         if (!canCreate) {
             throw BusinessException.forbidden("FORBIDDEN");
         }
-        dto.setFunctionary(principal.getStudentNo());
+        dto.setFunctionary(studentNo);
         ActivityDTO created = activityService.createActivity(dto);
         return Result.success(ActivityVO.fromDTO(created));
     }
@@ -108,7 +134,9 @@ public class ActivityController {
     public Result update(@PathVariable("id") String id,
                          @AuthenticationPrincipal UserPrincipal principal,
                          @ModelAttribute ActivityDTO dto) {
-        dto.setFunctionary(principal.getStudentNo());
+        ActivityDTO existing = activityService.getActivityById(id);
+        AuthorizationGuards.requireSelfOrAdmin(principal, existing.getFunctionary());
+        dto.setFunctionary(existing.getFunctionary());
         ActivityDTO updated = activityService.updateActivity(id, dto);
         return Result.success(ActivityVO.fromDTO(updated));
     }
@@ -139,14 +167,14 @@ public class ActivityController {
     @PostMapping("/{id}/enroll")
     public Result enroll(@PathVariable("id") String id,
                          @AuthenticationPrincipal UserPrincipal principal) {
-        activityService.enroll(id, principal.getStudentNo());
+        activityService.enroll(id, AuthorizationGuards.requireStudentNo(principal));
         return Result.success();
     }
 
     @PostMapping("/{id}/unenroll")
     public Result unenroll(@PathVariable("id") String id,
                            @AuthenticationPrincipal UserPrincipal principal) {
-        activityService.unenroll(id, principal.getStudentNo());
+        activityService.unenroll(id, AuthorizationGuards.requireStudentNo(principal));
         return Result.success();
     }
 
@@ -156,7 +184,8 @@ public class ActivityController {
                          @PathVariable("id") String id,
                          @RequestParam("approve") boolean approve,
                          @RequestParam(value = "reason", required = false) String reason) {
-        ActivityDTO dto = activityService.reviewActivity(id, approve, reason, principal.getStudentNo());
+        AuthorizationGuards.requireAdmin(principal);
+        ActivityDTO dto = activityService.reviewActivity(id, approve, reason, AuthorizationGuards.requireStudentNo(principal));
         return Result.success(ActivityVO.fromDTO(dto));
     }
 
@@ -164,7 +193,7 @@ public class ActivityController {
     public Result getMyActivities(@AuthenticationPrincipal UserPrincipal principal,
                                   @RequestParam(value = "page", required = false, defaultValue = "1") int page,
                                   @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize) {
-        MyActivityPageVO data = myActivityService.getMyActivities(principal.getStudentNo(), page, pageSize);
+        MyActivityPageVO data = myActivityService.getMyActivities(AuthorizationGuards.requireStudentNo(principal), page, pageSize);
         return Result.success(data);
     }
 
@@ -172,10 +201,11 @@ public class ActivityController {
     @BusinessOperation(action = "导入活动", targetType = "activity", detail = "负责人导入活动")
     public Result importActivity(@AuthenticationPrincipal UserPrincipal principal,
                                  @ModelAttribute ActivityImportDTO dto) {
+        String studentNo = AuthorizationGuards.requireStudentNo(principal);
         boolean isAdmin = AuthorizationGuards.isAdmin(principal);
 
         String activityId = pendingActivityService
-                .importActivity(dto, principal.getStudentNo(), isAdmin);
+                .importActivity(dto, studentNo, isAdmin);
         Map<String, Object> result = new HashMap<>();
         result.put("id", activityId);
         result.put("status", isAdmin ? "APPROVED" : "PENDING_REVIEW");
@@ -184,7 +214,7 @@ public class ActivityController {
 
     @GetMapping("/MyStatus")
     public Result getMyStatus(@AuthenticationPrincipal UserPrincipal principal) {
-        Map<String, Object> data = myActivityService.getMyStatus(principal.getStudentNo());
+        Map<String, Object> data = myActivityService.getMyStatus(AuthorizationGuards.requireStudentNo(principal));
         return Result.success(data);
     }
 
@@ -215,9 +245,9 @@ public class ActivityController {
             return Result.success(attachmentVO);
         } catch (IllegalArgumentException e) {
             throw BusinessException.badRequest(e.getMessage());
-        } catch (Exception e) {
+        } catch (IOException e) {
             log.error("文件上传失败", e);
-            throw new RuntimeException("文件上传失败: " + e.getMessage(), e);
+            throw new IllegalStateException("ATTACHMENT_UPLOAD_FAILED", e);
         }
     }
 
@@ -226,18 +256,11 @@ public class ActivityController {
      */
     @DeleteMapping("/attachment")
     public Result deleteAttachment(@RequestParam("filePath") String filePath) {
-        try {
-            boolean deleted = fileUploadService.deleteAttachment(filePath);
-            if (!deleted) {
-                throw BusinessException.notFound("附件删除失败或文件不存在");
-            }
-            return Result.success("附件删除成功");
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("删除附件失败", e);
-            throw new RuntimeException("删除附件失败: " + e.getMessage(), e);
+        boolean deleted = fileUploadService.deleteAttachment(filePath);
+        if (!deleted) {
+            throw BusinessException.notFound("附件删除失败或文件不存在");
         }
+        return Result.success("附件删除成功");
     }
 
     /**
@@ -245,17 +268,10 @@ public class ActivityController {
      */
     @GetMapping("/attachment/info")
     public Result getAttachmentInfo(@RequestParam("filePath") String filePath) {
-        try {
-            Map<String, Object> info = fileUploadService.getFileInfo(filePath);
-            if (info == null) {
-                throw BusinessException.notFound("附件不存在");
-            }
-            return Result.success(info);
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("获取附件信息失败", e);
-            throw new RuntimeException("获取附件信息失败: " + e.getMessage(), e);
+        Map<String, Object> info = fileUploadService.getFileInfo(filePath);
+        if (info == null) {
+            throw BusinessException.notFound("附件不存在");
         }
+        return Result.success(info);
     }
 }

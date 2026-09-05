@@ -21,6 +21,23 @@
         <collection property="participants" ofType="java.lang.String" column="id" select="selectParticipantsByPendingActivityId"/>
     </resultMap>
 
+    <resultMap id="PendingActivityBaseResultMap" type="site.arookieofc.dao.entity.PendingActivity">
+        <id column="id" property="id"/>
+        <result column="functionary" property="functionary"/>
+        <result column="name" property="name"/>
+        <result column="type" property="type"/>
+        <result column="description" property="description"/>
+        <result column="duration" property="duration"/>
+        <result column="end_time" property="endTime"/>
+        <result column="cover_path" property="coverPath"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="submitted_by" property="submittedBy"/>
+        <result column="status" property="status"/>
+        <result column="reviewed_at" property="reviewedAt"/>
+        <result column="reviewed_by" property="reviewedBy"/>
+        <result column="rejected_reason" property="rejectedReason"/>
+    </resultMap>
+
     <select id="getById" resultMap="PendingActivityResultMap">
         SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by,
                status, reviewed_at, reviewed_by, rejected_reason
@@ -54,7 +71,7 @@
         </where>
     </select>
 
-    <select id="listPaged" resultMap="PendingActivityResultMap">
+    <select id="listPaged" resultMap="PendingActivityBaseResultMap">
         SELECT id, functionary, name, type, description, duration, end_time, cover_path, created_at, submitted_by,
                status, reviewed_at, reviewed_by, rejected_reason
         FROM pending_activities
@@ -115,4 +132,3 @@
     </insert>
 
 </mapper>
-

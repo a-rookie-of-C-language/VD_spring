@@ -62,6 +62,8 @@ public class PendingBatchImportDTO {
         private String activityName;
         private String originalActivityName;
         private Boolean userExists;
+        private String validationStatus;
+        private String validationError;
 
         public static PendingBatchImportRecordDTO fromEntity(PendingBatchImportRecord entity) {
             if (entity == null) return null;
@@ -78,8 +80,9 @@ public class PendingBatchImportDTO {
                     .activityName(entity.getActivityName())
                     .originalActivityName(entity.getOriginalActivityName())
                     .userExists(entity.getUserExists())
+                    .validationStatus(entity.getValidationStatus())
+                    .validationError(entity.getValidationError())
                     .build();
         }
     }
 }
-

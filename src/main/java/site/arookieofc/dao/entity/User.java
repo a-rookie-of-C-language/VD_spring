@@ -14,6 +14,7 @@ public class User {
     private String studentNo;
     private String username;
     private String password;
+    private Integer tokenVersion;
     private Role role;
     private Double totalHours;
     private LocalDateTime createdAt;
@@ -27,6 +28,7 @@ public class User {
                 .studentNo(studentNo)
                 .username(username)
                 .password(password)
+                .tokenVersion(tokenVersion == null ? 0 : tokenVersion)
                 .role(role)
                 .totalHours(totalHours)
                 .createdAt(createdAt == null ? null : createdAt.atZone(ZoneId.of("Asia/Shanghai")).toOffsetDateTime())

@@ -57,6 +57,25 @@
         WHERE id = #{id}
     </select>
 
+    <select id="getByIdBase" resultMap="ActivityBaseResultMap">
+        SELECT id, functionary, name, type, description,
+               enrollment_start_time, enrollment_end_time,
+               start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
+               rejected_reason, imported, reviewed_at, reviewed_by
+        FROM activities
+        WHERE id = #{id}
+    </select>
+
+    <select id="selectForUpdate" resultMap="ActivityBaseResultMap">
+        SELECT id, functionary, name, type, description,
+               enrollment_start_time, enrollment_end_time,
+               start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
+               rejected_reason, imported, reviewed_at, reviewed_by
+        FROM activities
+        WHERE id = #{id}
+        FOR UPDATE
+    </select>
+
   <select id="listAll" resultMap="ActivityResultMap">
         SELECT id, functionary, name, type, description,
                enrollment_start_time, enrollment_end_time,
@@ -89,7 +108,7 @@
     </where>
   </select>
 
-  <select id="listPaged" resultMap="ActivityResultMap">
+  <select id="listPaged" resultMap="ActivityBaseResultMap">
     SELECT id, functionary, name, type, description,
            enrollment_start_time, enrollment_end_time,
            start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
@@ -107,6 +126,32 @@
     </where>
     ORDER BY start_time DESC
     LIMIT #{pageSize} OFFSET #{offset}
+  </select>
+
+  <select id="listByCursor" resultMap="ActivityBaseResultMap">
+    SELECT id, functionary, name, type, description,
+           enrollment_start_time, enrollment_end_time,
+           start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
+           rejected_reason, imported, reviewed_at, reviewed_by
+    FROM activities
+    <where>
+      <if test="type != null">AND type = #{type}</if>
+      <if test="status != null">AND status = #{status}</if>
+      <if test="status == null and excludeHidden != null and excludeHidden">AND status NOT IN ('UnderReview','FailReview','ActivityEnded')</if>
+      <if test="functionary != null and functionary != ''">AND functionary = #{functionary}</if>
+      <if test="name != null and name != ''">AND name LIKE CONCAT('%', #{name}, '%')</if>
+      <if test="startFrom != null">AND start_time &gt;= #{startFrom}</if>
+      <if test="startTo != null">AND start_time &lt;= #{startTo}</if>
+      <if test="isFull != null">AND is_full = #{isFull}</if>
+      <if test="cursorStartTime != null and cursorId != null and cursorId != ''">
+        AND (
+          start_time &lt; #{cursorStartTime}
+          OR (start_time = #{cursorStartTime} AND id &lt; #{cursorId})
+        )
+      </if>
+    </where>
+    ORDER BY start_time DESC, id DESC
+    LIMIT #{pageSize}
   </select>
 
     <insert id="insert" parameterType="site.arookieofc.dao.entity.Activity">
@@ -139,6 +184,7 @@
             status = #{status},
             is_full = #{isFull},
             duration = #{duration},
+            rejected_reason = #{rejectedReason},
             reviewed_at = #{reviewedAt},
             reviewed_by = #{reviewedBy}
         WHERE id = #{id}
@@ -218,7 +264,7 @@
       DELETE FROM activity_participants WHERE activity_id = #{activityId} AND student_no = #{studentNo}
   </delete>
 
-    <select id="getActivitiesByStudentNo" resultMap="ActivityResultMap">
+    <select id="getActivitiesByStudentNo" resultMap="ActivityBaseResultMap">
         SELECT a.id, a.functionary, a.name, a.type, a.description,
                a.enrollment_start_time, a.enrollment_end_time,
                a.start_time, a.expected_end_time, a.end_time, a.cover_path, a.max_participants, a.status, a.is_full, a.duration,
@@ -238,11 +284,8 @@
         ORDER BY count DESC
     </select>
 
-    <select id="getByName" resultMap="ActivityResultMap">
-        SELECT id, functionary, name, type, description,
-               enrollment_start_time, enrollment_end_time,
-               start_time, expected_end_time, end_time, cover_path, max_participants, status, is_full, duration,
-               rejected_reason, imported, reviewed_at, reviewed_by
+    <select id="getIdByName" resultType="java.lang.String">
+        SELECT id
         FROM activities
         WHERE name = #{name}
         LIMIT 1

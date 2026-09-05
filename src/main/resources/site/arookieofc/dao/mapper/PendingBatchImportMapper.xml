@@ -27,6 +27,8 @@
         <result column="activity_name" property="activityName"/>
         <result column="original_activity_name" property="originalActivityName"/>
         <result column="user_exists" property="userExists"/>
+        <result column="validation_status" property="validationStatus"/>
+        <result column="validation_error" property="validationError"/>
     </resultMap>
 
     <!-- 主表操作 -->
@@ -112,7 +114,8 @@
     <!-- 详情表操作 -->
     <select id="getRecordsByBatchId" resultMap="PendingBatchImportRecordResultMap">
         SELECT id, batch_id, username, gender, college, grade, student_no, phone,
-               duration, activity_name, original_activity_name, user_exists
+               duration, activity_name, original_activity_name, user_exists,
+               validation_status, validation_error
         FROM pending_batch_import_records
         WHERE batch_id = #{batchId}
         ORDER BY id
@@ -120,17 +123,17 @@
 
     <insert id="insertRecord" parameterType="site.arookieofc.dao.entity.PendingBatchImportRecord" useGeneratedKeys="true" keyProperty="id">
         INSERT INTO pending_batch_import_records
-            (batch_id, username, gender, college, grade, student_no, phone, duration, activity_name, original_activity_name, user_exists)
+            (batch_id, username, gender, college, grade, student_no, phone, duration, activity_name, original_activity_name, user_exists, validation_status, validation_error)
         VALUES
-            (#{batchId}, #{username}, #{gender}, #{college}, #{grade}, #{studentNo}, #{phone}, #{duration}, #{activityName}, #{originalActivityName}, #{userExists})
+            (#{batchId}, #{username}, #{gender}, #{college}, #{grade}, #{studentNo}, #{phone}, #{duration}, #{activityName}, #{originalActivityName}, #{userExists}, #{validationStatus}, #{validationError})
     </insert>
 
     <insert id="insertRecords" parameterType="list">
         INSERT INTO pending_batch_import_records
-            (batch_id, username, gender, college, grade, student_no, phone, duration, activity_name, original_activity_name, user_exists)
+            (batch_id, username, gender, college, grade, student_no, phone, duration, activity_name, original_activity_name, user_exists, validation_status, validation_error)
         VALUES
         <foreach collection="records" item="r" separator=",">
-            (#{r.batchId}, #{r.username}, #{r.gender}, #{r.college}, #{r.grade}, #{r.studentNo}, #{r.phone}, #{r.duration}, #{r.activityName}, #{r.originalActivityName}, #{r.userExists})
+            (#{r.batchId}, #{r.username}, #{r.gender}, #{r.college}, #{r.grade}, #{r.studentNo}, #{r.phone}, #{r.duration}, #{r.activityName}, #{r.originalActivityName}, #{r.userExists}, #{r.validationStatus}, #{r.validationError})
         </foreach>
     </insert>
 
@@ -139,4 +142,3 @@
     </delete>
 
 </mapper>
-

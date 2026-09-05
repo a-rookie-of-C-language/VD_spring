@@ -1,13 +1,14 @@
 package site.arookieofc.service;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessageProperties;
-import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.event.EventListener;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import jakarta.validation.Valid;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.stereotype.Service;
+import site.arookieofc.common.cache.CacheInvalidateEvent;
 import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.dao.entity.Activity;
@@ -15,12 +16,16 @@ import site.arookieofc.dao.mapper.ActivityMapper;
 import site.arookieofc.service.BO.ActivityType;
 import site.arookieofc.service.dto.ActivityDTO;
 import site.arookieofc.service.messaging.ActivityStartupSynchronizer;
-import site.arookieofc.service.messaging.ActivityStatusUpdateMessage;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import site.arookieofc.configuration.RabbitConfig;
+import site.arookieofc.service.messaging.ActivityStatusTaskService;
+import site.arookieofc.common.cache.LocalCache;
+import site.arookieofc.util.PaginationUtils;
+import java.io.IOException;
 import java.time.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -30,8 +35,20 @@ import java.util.stream.Collectors;
 public class ActivityService {
     private final ActivityMapper activityMapper;
     private final FileUploadService fileUploadService;
-    private final RabbitTemplate rabbitTemplate;
+    private final ActivityStatusTaskService activityStatusTaskService;
+    private final ApplicationEventPublisher eventPublisher;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+
+    // 5s TTL, 1s null TTL (penetration), ±20% jitter (avalanche)
+    private final LocalCache<List<ActivityDTO>> queryCache = new LocalCache<>(5_000, 1_000, 0.2);
+
+    @EventListener
+    public void onCacheInvalidate(CacheInvalidateEvent event) {
+        if (event.getScope() == CacheInvalidateEvent.Scope.ACTIVITY
+                || event.getScope() == CacheInvalidateEvent.Scope.ALL) {
+            queryCache.invalidateAll();
+        }
+    }
 
     private ActivityDTO enrichWithCoverImage(ActivityDTO dto) {
         if (dto.getCoverPath() != null && !dto.getCoverPath().isEmpty()) {
@@ -72,78 +89,111 @@ public class ActivityService {
     }
 
     public ActivityDTO getActivityById(String id) {
-        Activity activity = activityMapper.getById(id);
+        Activity activity = activityMapper.getByIdBase(id);
         if (activity == null) {
             throw BusinessException.notFound("NOT_FOUND");
         }
         return enrichWithCoverImage(activity.toDTO(ZONE));
     }
 
+    // ── Public delegates: hide/include review-ended activities ──
+
     public int countActivities(ActivityType type, ActivityStatus status,
                                String functionary, String name,
                                OffsetDateTime startFrom, OffsetDateTime startTo,
                                Boolean isFull) {
-        return countActivities(type, status, functionary, name, startFrom, startTo, isFull, false);
+        return doCount(type, status, functionary, name, startFrom, startTo, isFull, false);
     }
 
     public int countActivitiesAll(ActivityType type, ActivityStatus status,
                                   String functionary, String name,
                                   OffsetDateTime startFrom, OffsetDateTime startTo,
                                   Boolean isFull) {
-        return countActivities(type, status, functionary, name, startFrom, startTo, isFull, true);
-    }
-
-    private int countActivities(ActivityType type, ActivityStatus status,
-                                String functionary, String name,
-                                OffsetDateTime startFrom, OffsetDateTime startTo,
-                                Boolean isFull, boolean includeHidden) {
-        LocalDateTime sf = startFrom == null ? null : startFrom.atZoneSameInstant(ZONE).toLocalDateTime();
-        LocalDateTime st = startTo == null ? null : startTo.atZoneSameInstant(ZONE).toLocalDateTime();
-        boolean excludeHidden = includeHidden ? false : (status == null);
-        return activityMapper.countFiltered(type, status, functionary, name, sf, st, isFull, excludeHidden);
+        return doCount(type, status, functionary, name, startFrom, startTo, isFull, true);
     }
 
     public List<ActivityDTO> listActivitiesPaged(ActivityType type, ActivityStatus status,
                                                  String functionary, String name,
                                                  OffsetDateTime startFrom, OffsetDateTime startTo,
                                                  Boolean isFull, int page, int pageSize) {
-        return listActivitiesPaged(type, status, functionary, name, startFrom, startTo, isFull, false, page, pageSize);
+        return doListPaged(type, status, functionary, name, startFrom, startTo, isFull, false, page, pageSize);
     }
 
     public List<ActivityDTO> listActivitiesPagedAll(ActivityType type, ActivityStatus status,
                                                     String functionary, String name,
                                                     OffsetDateTime startFrom, OffsetDateTime startTo,
                                                     Boolean isFull, int page, int pageSize) {
-        return listActivitiesPaged(type, status, functionary, name, startFrom, startTo, isFull, true, page, pageSize);
+        return doListPaged(type, status, functionary, name, startFrom, startTo, isFull, true, page, pageSize);
     }
 
-    private List<ActivityDTO> listActivitiesPaged(ActivityType type, ActivityStatus status,
-                                                  String functionary, String name,
-                                                  OffsetDateTime startFrom, OffsetDateTime startTo,
-                                                  Boolean isFull, boolean includeHidden,
-                                                  int page, int pageSize) {
-        int offset = Math.max(0, (page - 1) * pageSize);
-        LocalDateTime sf = startFrom == null ? null : startFrom.atZoneSameInstant(ZONE).toLocalDateTime();
-        LocalDateTime st = startTo == null ? null : startTo.atZoneSameInstant(ZONE).toLocalDateTime();
-        boolean excludeHidden = includeHidden ? false : (status == null);
-        return activityMapper.listPaged(type, status, functionary, name, sf, st, isFull, excludeHidden, pageSize, offset)
-                .stream()
-                .map(a -> a.toDTO(ZONE))
-                .map(this::enrichWithCoverImage)
-                .collect(Collectors.toList());
+    public List<ActivityDTO> listActivitiesByCursor(ActivityType type, ActivityStatus status,
+                                                    String functionary, String name,
+                                                    OffsetDateTime startFrom, OffsetDateTime startTo,
+                                                    Boolean isFull,
+                                                    OffsetDateTime cursorStartTime, String cursorId,
+                                                    int pageSize) {
+        return doListByCursor(type, status, functionary, name, startFrom, startTo, isFull, false, cursorStartTime, cursorId, pageSize);
+    }
+
+    public List<ActivityDTO> listActivitiesByCursorAll(ActivityType type, ActivityStatus status,
+                                                       String functionary, String name,
+                                                       OffsetDateTime startFrom, OffsetDateTime startTo,
+                                                       Boolean isFull,
+                                                       OffsetDateTime cursorStartTime, String cursorId,
+                                                       int pageSize) {
+        return doListByCursor(type, status, functionary, name, startFrom, startTo, isFull, true, cursorStartTime, cursorId, pageSize);
+    }
+
+    // ── Core implementations ──
+
+    private int doCount(ActivityType type, ActivityStatus status, String functionary, String name,
+                        OffsetDateTime startFrom, OffsetDateTime startTo, Boolean isFull, boolean includeHidden) {
+        boolean excludeHidden = !includeHidden && status == null;
+        return activityMapper.countFiltered(type, status, functionary, name,
+                toLocal(startFrom), toLocal(startTo), isFull, excludeHidden);
+    }
+
+    private List<ActivityDTO> doListPaged(ActivityType type, ActivityStatus status, String functionary, String name,
+                                          OffsetDateTime startFrom, OffsetDateTime startTo, Boolean isFull,
+                                          boolean includeHidden, int page, int pageSize) {
+        int safePage = PaginationUtils.normalizePage(page);
+        int safePageSize = PaginationUtils.normalizePageSize(pageSize);
+        String cacheKey = cacheKey(type, status, functionary, name, startFrom, startTo, isFull, includeHidden, safePage, safePageSize);
+        return queryCache.get(cacheKey, () -> {
+            int offset = PaginationUtils.offset(safePage, safePageSize);
+            boolean excludeHidden = !includeHidden && status == null;
+            return activityMapper.listPaged(type, status, functionary, name,
+                            toLocal(startFrom), toLocal(startTo), isFull, excludeHidden, safePageSize, offset)
+                    .stream().map(a -> a.toDTO(ZONE)).map(this::enrichWithCoverImage).collect(Collectors.toList());
+        });
+    }
+
+    private static String cacheKey(Object... parts) {
+        StringBuilder sb = new StringBuilder();
+        for (Object p : parts) sb.append(p == null ? "N" : p).append('|');
+        return sb.toString();
+    }
+
+    private List<ActivityDTO> doListByCursor(ActivityType type, ActivityStatus status, String functionary, String name,
+                                             OffsetDateTime startFrom, OffsetDateTime startTo, Boolean isFull,
+                                             boolean includeHidden, OffsetDateTime cursorStartTime, String cursorId,
+                                             int pageSize) {
+        int safePageSize = PaginationUtils.normalizePageSize(
+                pageSize, PaginationUtils.DEFAULT_MAX_PAGE_SIZE + 1);
+        boolean excludeHidden = !includeHidden && status == null;
+        return activityMapper.listByCursor(type, status, functionary, name,
+                        toLocal(startFrom), toLocal(startTo), isFull, excludeHidden,
+                        toLocal(cursorStartTime), cursorId, safePageSize)
+                .stream().map(a -> a.toDTO(ZONE)).map(this::enrichWithCoverImage).collect(Collectors.toList());
+    }
+
+    private LocalDateTime toLocal(OffsetDateTime odt) {
+        return odt == null ? null : odt.atZoneSameInstant(ZONE).toLocalDateTime();
     }
 
     @Transactional
     public ActivityDTO createActivity(@Valid ActivityDTO dto) {
-        try {
-            MultipartFile coverFile = dto.getCoverFile();
-            if (coverFile != null && !coverFile.isEmpty()) {
-                String path = fileUploadService.uploadCoverImage(coverFile);
-                dto.setCoverPath(path);
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Cover file upload failed: " + e.getMessage(), e);
-        }
+        uploadCoverIfPresent(dto);
         dto.setStatus(ActivityStatus.UnderReview);
         String id = dto.getId() == null
                 || dto.getId().isEmpty()
@@ -151,26 +201,18 @@ public class ActivityService {
                 : dto.getId();
         Activity entity = dto.toEntity(id, ZONE);
         activityMapper.insert(entity);
-        scheduleStatusMessages(entity);
         if (dto.getAttachment() != null && !dto.getAttachment().isEmpty()) {
             activityMapper.insertAttachments(id, dto.getAttachment());
         }
         
-        String functionary = dto.getFunctionary();
-        if (functionary != null && !functionary.isEmpty()) {
-            activityMapper.insertParticipant(id, functionary);
-        }
-        
-        if (dto.getParticipants() != null && !dto.getParticipants().isEmpty()) {
-            for (String participant : dto.getParticipants()) {
-                if (!participant.equals(functionary)) {
-                    int exists = activityMapper.existsParticipant(id, participant);
-                    if (exists == 0) {
-                        activityMapper.insertParticipant(id, participant);
-                    }
-                }
+        List<String> participants = normalizeParticipants(dto.getParticipants(), dto.getFunctionary(), true);
+        for (String participant : participants) {
+            int exists = activityMapper.existsParticipant(id, participant);
+            if (exists == 0) {
+                activityMapper.insertParticipant(id, participant);
             }
         }
+        eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.ACTIVITY, "create"));
         return getActivityDTO(id);
     }
 
@@ -182,7 +224,6 @@ public class ActivityService {
         if (!Objects.equals(created.getIsFull(), full)) {
             created.setIsFull(full);
             activityMapper.update(created);
-            created = activityMapper.getById(id);
         }
         return enrichWithCoverImage(created.toDTO(ZONE));
     }
@@ -196,19 +237,14 @@ public class ActivityService {
         if (current.getStatus() != ActivityStatus.UnderReview && current.getStatus() != ActivityStatus.FailReview) {
             throw BusinessException.badRequest("REVIEW_PASSED");
         }
-        try {
-            MultipartFile coverFile = dto.getCoverFile();
-            if (coverFile != null && !coverFile.isEmpty()) {
-                String path = fileUploadService.uploadCoverImage(coverFile);
-                dto.setCoverPath(path);
-            }
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Cover file upload failed: " + e.getMessage(), e);
-        }
+        uploadCoverIfPresent(dto);
+        dto.setStatus(ActivityStatus.UnderReview);
+        dto.setRejectedReason(null);
+        dto.setReviewedAt(null);
+        dto.setReviewedBy(null);
         Activity entity = dto.toEntity(id, ZONE);
 
         activityMapper.update(entity);
-        scheduleStatusMessages(entity);
         if (dto.getAttachment() != null) {
             activityMapper.deleteAttachmentsByActivityId(id);
             if (!dto.getAttachment().isEmpty()) {
@@ -217,15 +253,44 @@ public class ActivityService {
         }
         if (dto.getParticipants() != null) {
             activityMapper.deleteParticipantsByActivityId(id);
-            if (!dto.getParticipants().isEmpty()) {
-                activityMapper.insertParticipants(id, dto.getParticipants());
+            List<String> participants = normalizeParticipants(dto.getParticipants(), entity.getFunctionary(), true);
+            if (!participants.isEmpty()) {
+                activityMapper.insertParticipants(id, participants);
             }
         }
+        eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.ACTIVITY, "update"));
         return getActivityDTO(id);
+    }
+
+    private void uploadCoverIfPresent(ActivityDTO dto) {
+        MultipartFile coverFile = dto.getCoverFile();
+        if (coverFile == null || coverFile.isEmpty()) {
+            return;
+        }
+        try {
+            dto.setCoverPath(fileUploadService.uploadCoverImage(coverFile));
+        } catch (IOException | IllegalArgumentException e) {
+            throw new IllegalArgumentException("Cover file upload failed: " + e.getMessage(), e);
+        }
     }
 
     private void refreshStatus(Activity a) {
         ActivityStartupSynchronizer.changeStatus(a, ZONE);
+    }
+
+    private List<String> normalizeParticipants(List<String> participants, String functionary, boolean includeFunctionary) {
+        Set<String> normalized = new LinkedHashSet<>();
+        if (includeFunctionary && functionary != null && !functionary.isBlank()) {
+            normalized.add(functionary.trim());
+        }
+        if (participants != null) {
+            for (String participant : participants) {
+                if (participant != null && !participant.isBlank()) {
+                    normalized.add(participant.trim());
+                }
+            }
+        }
+        return new ArrayList<>(normalized);
     }
 
     @Transactional
@@ -233,58 +298,56 @@ public class ActivityService {
         activityMapper.deleteAttachmentsByActivityId(id);
         activityMapper.deleteParticipantsByActivityId(id);
         activityMapper.delete(id);
+        eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.ACTIVITY, "delete"));
     }
 
     @Transactional
     public void enroll(String activityId, String studentNo) {
-        Activity act = activityMapper.getById(activityId);
-        if (act == null) {
-            throw BusinessException.notFound("NOT_FOUND");
+        // SELECT FOR UPDATE serializes concurrent enrollments on the same activity,
+        // preventing the TOCTOU race where two threads both pass the capacity check.
+        Activity act = activityMapper.selectForUpdate(activityId);
+        if (act == null) throw BusinessException.notFound("NOT_FOUND");
+
+        if (activityMapper.existsParticipant(activityId, studentNo) > 0) {
+            throw BusinessException.conflict("ALREADY_ENROLLED");
         }
         int cnt = activityMapper.countParticipantsByActivityId(activityId);
         if (act.getMaxParticipant() != null && cnt >= act.getMaxParticipant()) {
             throw BusinessException.conflict("CAPACITY_FULL");
         }
-        int exists = activityMapper.existsParticipant(activityId, studentNo);
-        if (exists > 0) {
-            throw BusinessException.conflict("ALREADY_ENROLLED");
-        }
         activityMapper.insertParticipant(activityId, studentNo);
-        int after = cnt + 1;
-        boolean full = act.getMaxParticipant() != null && after >= act.getMaxParticipant();
-        if (full && !Objects.equals(act.getIsFull(), true)) {
-            Activity updated = activityMapper.getById(activityId);
-            updated.setIsFull(true);
-            activityMapper.update(updated);
+
+        if (act.getMaxParticipant() != null && cnt + 1 >= act.getMaxParticipant()
+                && !Boolean.TRUE.equals(act.getIsFull())) {
+            act.setIsFull(true);
+            activityMapper.update(act);
         }
+        eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.ACTIVITY, "enroll"));
     }
 
     @Transactional
     public void unenroll(String activityId, String studentNo) {
-        Activity act = activityMapper.getById(activityId);
-        if (act == null) {
-            throw BusinessException.notFound("NOT_FOUND");
-        }
+        Activity act = activityMapper.selectForUpdate(activityId);
+        if (act == null) throw BusinessException.notFound("NOT_FOUND");
         if (studentNo.equals(act.getFunctionary())) {
             throw BusinessException.forbidden("FUNCTIONARY_CANNOT_UNENROLL");
         }
-        LocalDateTime now = LocalDateTime.now(ZONE);
         LocalDateTime enrollmentEnd = act.getEnrollmentEndTime();
-        if (enrollmentEnd == null || !now.isBefore(enrollmentEnd)) {
+        if (enrollmentEnd == null || !LocalDateTime.now(ZONE).isBefore(enrollmentEnd)) {
             throw BusinessException.badRequest("ENROLLMENT_ENDED");
         }
-        int exists = activityMapper.existsParticipant(activityId, studentNo);
-        if (exists == 0) {
+        if (activityMapper.existsParticipant(activityId, studentNo) == 0) {
             throw BusinessException.conflict("NOT_ENROLLED");
         }
         activityMapper.deleteParticipant(activityId, studentNo);
+
         int cnt = activityMapper.countParticipantsByActivityId(activityId);
-        boolean full = act.getMaxParticipant() != null && cnt >= act.getMaxParticipant();
-        if (Boolean.TRUE.equals(act.getIsFull()) && !full) {
-            Activity updated = activityMapper.getById(activityId);
-            updated.setIsFull(false);
-            activityMapper.update(updated);
+        if (Boolean.TRUE.equals(act.getIsFull())
+                && (act.getMaxParticipant() == null || cnt < act.getMaxParticipant())) {
+            act.setIsFull(false);
+            activityMapper.update(act);
         }
+        eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.ACTIVITY, "unenroll"));
     }
 
     @Transactional
@@ -309,6 +372,7 @@ public class ActivityService {
             if (rows == 0) {
                 throw BusinessException.badRequest("ALREADY_REVIEWED");
             }
+            eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.ACTIVITY, "review-reject"));
             return getActivityDTO(id);
         }
         LocalDateTime now = LocalDateTime.now(ZONE);
@@ -336,6 +400,7 @@ public class ActivityService {
             throw BusinessException.badRequest("ALREADY_REVIEWED");
         }
         scheduleStatusMessages(a);
+        eventPublisher.publishEvent(new CacheInvalidateEvent(this, CacheInvalidateEvent.Scope.ACTIVITY, "review-approve"));
         return getActivityDTO(id);
     }
 
@@ -361,20 +426,7 @@ public class ActivityService {
 
     private void scheduleOne(String id, LocalDateTime when, ActivityStatus status, ZonedDateTime now) {
         if (when == null) return;
-        ZonedDateTime target = when.atZone(ZONE);
-        long delayMs = Duration.between(now, target).toMillis();
-        if (delayMs <= 0) return;
-        ActivityStatusUpdateMessage msg = new ActivityStatusUpdateMessage(id, status);
-        MessageProperties props = new MessageProperties();
-        props.setHeader("x-delay", delayMs);
-        props.setContentType(MessageProperties.CONTENT_TYPE_JSON);
-        byte[] body;
-        try {
-            body = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(msg);
-        } catch (Exception e) {
-            body = (id + "|" + status.name()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        }
-        Message amqpMsg = new Message(body, props);
-        rabbitTemplate.send(RabbitConfig.DELAY_EXCHANGE, RabbitConfig.DELAY_ROUTING_KEY, amqpMsg);
+        if (Duration.between(now, when.atZone(ZONE)).toMillis() <= 0) return;
+        activityStatusTaskService.scheduleStatusUpdate(id, status, when, "activity-service");
     }
 }

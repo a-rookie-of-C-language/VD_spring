@@ -14,6 +14,7 @@ import site.arookieofc.service.BO.ActivityStatus;
 import site.arookieofc.service.PersonalHourRequestService;
 import site.arookieofc.service.BO.ActivityType;
 import site.arookieofc.service.dto.PersonalHourRequestDTO;
+import site.arookieofc.util.PaginationUtils;
 
 import java.time.OffsetDateTime;
 import java.util.HashMap;
@@ -38,6 +39,7 @@ public class PersonalHourRequestController {
                                 @RequestParam("endTime") String endTime,
                                 @RequestParam("duration") Double duration,
                                 @RequestParam(value = "files", required = false) List<MultipartFile> files) {
+        String studentNo = AuthorizationGuards.requireStudentNo(principal);
         PersonalHourRequestDTO dto = PersonalHourRequestDTO.builder()
                 .name(name)
                 .functionary(functionary)
@@ -49,7 +51,7 @@ public class PersonalHourRequestController {
                 .files(files)
                 .build();
 
-        PersonalHourRequestDTO created = requestService.submitRequest(dto, principal.getStudentNo());
+        PersonalHourRequestDTO created = requestService.submitRequest(dto, studentNo);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -64,6 +66,8 @@ public class PersonalHourRequestController {
                                      @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize) {
         AuthorizationGuards.requireAdmin(principal);
 
+        page = PaginationUtils.normalizePage(page);
+        pageSize = PaginationUtils.normalizePageSize(pageSize);
         int total = requestService.countUnderViewRequests();
         List<PersonalHourRequestDTO> items = requestService.listPendingRequests(page, pageSize);
 
@@ -88,8 +92,9 @@ public class PersonalHourRequestController {
             throw BusinessException.badRequest("REASON_REQUIRED");
         }
 
+        String reviewerStudentNo = AuthorizationGuards.requireStudentNo(principal);
         PersonalHourRequestDTO reviewed = requestService.reviewRequest(
-                id, approved, reason, principal.getStudentNo());
+                id, approved, reason, reviewerStudentNo);
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);
@@ -102,7 +107,9 @@ public class PersonalHourRequestController {
                                 @RequestParam(value = "page", required = false, defaultValue = "1") int page,
                                 @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize,
                                 @RequestParam(value = "status", required = false) ActivityStatus status) {
-        String studentNo = principal.getStudentNo();
+        page = PaginationUtils.normalizePage(page);
+        pageSize = PaginationUtils.normalizePageSize(pageSize);
+        String studentNo = AuthorizationGuards.requireStudentNo(principal);
         int total = requestService.countRequests(studentNo, null, status, null);
         List<PersonalHourRequestDTO> items = requestService.listRequestsPaged(
                 studentNo, null, status, null, page, pageSize);
@@ -127,7 +134,7 @@ public class PersonalHourRequestController {
     @DeleteMapping("/request/{id}")
     public Result deleteRequest(@AuthenticationPrincipal UserPrincipal principal,
                                 @PathVariable("id") String id) {
-        requestService.deleteRequest(id, principal.getStudentNo());
+        requestService.deleteRequest(id, AuthorizationGuards.requireStudentNo(principal));
 
         Map<String, Object> result = new HashMap<>();
         result.put("success", true);

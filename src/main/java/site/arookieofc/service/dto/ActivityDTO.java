@@ -56,27 +56,7 @@ public class ActivityDTO {
     private String reviewedBy;            // 审核人学号
 
     public Activity toEntity(java.time.ZoneId zone) {
-        return site.arookieofc.dao.entity.Activity.builder()
-                .id(this.id)
-                .functionary(this.functionary)
-                .name(this.name)
-                .type(this.type)
-                .description(this.description)
-                .enrollmentStartTime(this.enrollmentStartTime == null ? null : this.enrollmentStartTime.atZoneSameInstant(zone).toLocalDateTime())
-                .enrollmentEndTime(this.enrollmentEndTime == null ? null : this.enrollmentEndTime.atZoneSameInstant(zone).toLocalDateTime())
-                .startTime(this.startTime == null ? null : this.startTime.atZoneSameInstant(zone).toLocalDateTime())
-                .expectedEndTime(this.expectedEndTime == null ? null : this.expectedEndTime.atZoneSameInstant(zone).toLocalDateTime())
-                .endTime(this.endTime == null ? null : this.endTime.atZoneSameInstant(zone).toLocalDateTime())
-                .coverPath(this.coverPath)
-                .maxParticipant(this.maxParticipants)
-                .status(this.status)
-                .isFull(this.isFull != null ? this.isFull : false)
-                .duration(this.duration)
-                .rejectedReason(this.rejectedReason)
-                .imported(this.imported != null ? this.imported : false)
-                .reviewedAt(this.reviewedAt == null ? null : this.reviewedAt.atZoneSameInstant(zone).toLocalDateTime())
-                .reviewedBy(this.reviewedBy)
-                .build();
+        return toEntity(this.id, zone);
     }
 
     public Activity toEntity(String id, java.time.ZoneId zone) {

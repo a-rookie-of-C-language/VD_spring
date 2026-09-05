@@ -6,6 +6,7 @@
         <result column="student_no" property="studentNo"/>
         <result column="username" property="username"/>
         <result column="password" property="password"/>
+        <result column="token_version" property="tokenVersion"/>
         <result column="role" property="role"/>
         <result column="total_hours" property="totalHours"/>
         <result column="created_at" property="createdAt"/>
@@ -15,14 +16,23 @@
     </resultMap>
 
     <select id="getUserByStudentNo" resultMap="UserResultMap">
-        SELECT username, student_no, password, role, total_hours, created_at, clazz, grade, college
+        SELECT username, student_no, password, token_version, role, total_hours, created_at, clazz, grade, college
         FROM users
         WHERE student_no = #{studentNo}
         LIMIT 1
     </select>
 
+    <select id="listByStudentNos" resultMap="UserResultMap">
+        SELECT username, student_no, password, token_version, role, total_hours, created_at, clazz, grade, college
+        FROM users
+        WHERE student_no IN
+        <foreach collection="studentNos" item="sn" open="(" separator="," close=")">
+            #{sn}
+        </foreach>
+    </select>
+
     <select id="listAll" resultMap="UserResultMap">
-        SELECT username, student_no, password, role, total_hours, created_at, clazz, grade, college
+        SELECT username, student_no, password, token_version, role, total_hours, created_at, clazz, grade, college
         FROM users
         ORDER BY student_no
     </select>
@@ -40,13 +50,19 @@
     </update>
 
     <insert id="insertUser" parameterType="site.arookieofc.dao.entity.User">
-        INSERT INTO users (student_no, username, password, role, total_hours, created_at, clazz, grade, college)
-        VALUES (#{studentNo}, #{username}, #{password}, #{role}, #{totalHours}, #{createdAt}, #{clazz}, #{grade}, #{college})
+        INSERT INTO users (student_no, username, password, token_version, role, total_hours, created_at, clazz, grade, college)
+        VALUES (#{studentNo}, #{username}, #{password}, IFNULL(#{tokenVersion}, 0), #{role}, #{totalHours}, #{createdAt}, #{clazz}, #{grade}, #{college})
     </insert>
 
     <update id="updatePassword">
         UPDATE users
         SET password = #{password}
+        WHERE student_no = #{studentNo}
+    </update>
+
+    <update id="incrementTokenVersion">
+        UPDATE users
+        SET token_version = COALESCE(token_version, 0) + 1
         WHERE student_no = #{studentNo}
     </update>
 
