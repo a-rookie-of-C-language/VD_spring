@@ -4,8 +4,6 @@ server:
     context-path: /api
 
 spring:
-  profiles:
-    active: docker
   datasource:
     url: ${SPRING_DATASOURCE_URL:jdbc:mysql://mysql:3306/VD?allowPublicKeyRetrieval=true&useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai}
     driver-class-name: com.mysql.cj.jdbc.Driver

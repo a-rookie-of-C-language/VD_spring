@@ -6,6 +6,7 @@ import com.sun.management.OperatingSystemMXBean;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.AmqpException;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -65,6 +66,7 @@ public class DeveloperMonitorService {
     private volatile DeveloperMetricsVO.MiddlewareStatusVO cachedEs;
     private volatile long healthCacheExpiresAt;
 
+    @Autowired
     public DeveloperMonitorService(RequestMetricsCollector requestMetricsCollector,
                                    SystemMetricsWebSocketHandler webSocketHandler,
                                    MetricsSseBroadcaster metricsSseBroadcaster,

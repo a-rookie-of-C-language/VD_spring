@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
@@ -43,6 +44,7 @@ public class MonitoringService {
     private final LocalCache<MonitoringOverviewVO> overviewCache = new LocalCache<>(30_000, 5_000, 0.2);
     private final LocalCache<MonitoringFiltersVO> filtersCache = new LocalCache<>(300_000, 30_000, 0.2);
 
+    @Autowired
     public MonitoringService(MonitoringMapper monitoringMapper, ElasticsearchTemplate esTemplate) {
         this(monitoringMapper, esTemplate, "volunteer-duration-*");
     }

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import site.arookieofc.dao.mapper.UserMapper;
@@ -34,6 +35,7 @@ public class CampusIdentityServiceImpl implements CampusIdentityService {
     @Value("${app.identity.http.path-template:/api/identity/users/{studentNo}/exists}")
     private String identityPathTemplate;
 
+    @Autowired
     public CampusIdentityServiceImpl(UserMapper userMapper, ObjectMapper objectMapper) {
         this(userMapper, objectMapper, HttpClient.newBuilder()
                 .connectTimeout(Duration.ofSeconds(3))

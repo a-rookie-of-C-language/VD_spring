@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import jakarta.annotation.PostConstruct;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,7 @@ public class BusinessOperationLogService {
     private final ConcurrentLinkedQueue<BusinessOperationLogVO> fallbackBuffer = new ConcurrentLinkedQueue<>();
     private final AtomicBoolean esBootstrapDone = new AtomicBoolean(false);
 
+    @Autowired
     public BusinessOperationLogService(ObjectMapper objectMapper, ElasticsearchTemplate esTemplate) {
         this(objectMapper, esTemplate,
                 "volunteer-business-log",

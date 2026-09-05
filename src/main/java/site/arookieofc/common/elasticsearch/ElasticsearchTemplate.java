@@ -3,6 +3,7 @@ package site.arookieofc.common.elasticsearch;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -30,6 +31,7 @@ public class ElasticsearchTemplate {
     private final String host;
     private final int port;
 
+    @Autowired
     public ElasticsearchTemplate(ObjectMapper objectMapper,
                                  @Value("${app.logging.es.scheme:http}") String scheme,
                                  @Value("${app.logging.es.host:localhost}") String host,
