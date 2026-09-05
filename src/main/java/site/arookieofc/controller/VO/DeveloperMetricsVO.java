@@ -21,6 +21,9 @@ public class DeveloperMetricsVO {
     private double qps;
     private long totalRequests;
     private int websocketClients;
+    private int websocketMaxConnections;
+    private int sseClients;
+    private String pushMode;
     private MiddlewareStatusVO mysql;
     private MiddlewareStatusVO rabbitmq;
     private MiddlewareStatusVO elasticsearch;

@@ -3,24 +3,39 @@ package site.arookieofc.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import site.arookieofc.common.audit.BusinessOperation;
 import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.controller.VO.*;
+import site.arookieofc.security.AuthorizationGuards;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.BusinessOperationLogService;
 import site.arookieofc.service.monitor.DeveloperMonitorService;
 import site.arookieofc.service.MonitoringService;
+import site.arookieofc.service.messaging.ActivityStatusTaskService;
+import site.arookieofc.util.PaginationUtils;
 
 @RestController
 @RequestMapping({"/monitoring", "/api/monitoring"})
 @RequiredArgsConstructor
 @Slf4j
 public class MonitoringController {
+    private static final int DEFAULT_LOG_SIZE = 50;
+    private static final int MIN_LOG_SIZE = 1;
+    private static final int MAX_LOG_SIZE = 200;
+    private static final int DEFAULT_REPLAY_LIMIT = 100;
+    private static final int MIN_REPLAY_LIMIT = 1;
+    private static final int MAX_REPLAY_LIMIT = 500;
 
     private final MonitoringService monitoringService;
     private final DeveloperMonitorService developerMonitorService;
     private final BusinessOperationLogService businessOperationLogService;
+    private final ActivityStatusTaskService activityStatusTaskService;
 
     @GetMapping("/dashboard")
     public Result getDashboard(
@@ -68,8 +83,8 @@ public class MonitoringController {
             request = UserStatsRequestVO.builder().build();
         }
 
-        int page = request.getPage() != null ? request.getPage() : 1;
-        int pageSize = request.getPageSize() != null ? request.getPageSize() : 10;
+        int page = PaginationUtils.normalizePage(request.getPage());
+        int pageSize = PaginationUtils.normalizePageSize(request.getPageSize());
         String college = request.getCollege();
         String grade = request.getGrade();
         String clazz = request.getClazz();
@@ -86,14 +101,23 @@ public class MonitoringController {
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(value = "size", required = false, defaultValue = "50") Integer size,
             @RequestParam(value = "keyword", required = false) String keyword) {
-        List<MonitoringLogVO> logs = monitoringService.getRecentLogs(size, keyword);
+        List<MonitoringLogVO> logs = monitoringService.getRecentLogs(normalizeLogSize(size), keyword);
         return Result.success(logs);
     }
 
     @GetMapping("/developer-metrics")
     public Result getDeveloperMetrics(@AuthenticationPrincipal UserPrincipal principal) {
-        DeveloperMetricsVO metrics = developerMonitorService.snapshot();
+        DeveloperMetricsVO metrics = developerMonitorService.latestOrSnapshot();
         return Result.success(metrics);
+    }
+
+    @GetMapping("/developer-metrics/sse")
+    public SseEmitter streamDeveloperMetrics(@AuthenticationPrincipal UserPrincipal principal) {
+        try {
+            return developerMonitorService.openSseStream();
+        } catch (IllegalStateException e) {
+            throw BusinessException.conflict("SSE_CONNECTION_LIMIT_REACHED");
+        }
     }
 
     @GetMapping("/business-logs")
@@ -101,7 +125,63 @@ public class MonitoringController {
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestParam(value = "size", required = false, defaultValue = "50") Integer size,
             @RequestParam(value = "keyword", required = false) String keyword) {
-        List<BusinessOperationLogVO> logs = businessOperationLogService.queryRecent(size, keyword);
+        List<BusinessOperationLogVO> logs = businessOperationLogService.queryRecent(normalizeLogSize(size), keyword);
         return Result.success(logs);
+    }
+
+    @GetMapping("/mq-task-stats")
+    public Result getMqTaskStats(@AuthenticationPrincipal UserPrincipal principal) {
+        Map<String, Long> stats = activityStatusTaskService.getTaskStatusStats();
+        long pending = stats.getOrDefault("PENDING", 0L);
+        long sent = stats.getOrDefault("SENT", 0L);
+        long failed = stats.getOrDefault("FAILED", 0L);
+        long dead = stats.getOrDefault("DEAD", 0L);
+        long done = stats.getOrDefault("DONE", 0L);
+        ActivityStatusTaskMetricsVO vo = ActivityStatusTaskMetricsVO.builder()
+                .pending(pending)
+                .sent(sent)
+                .failed(failed)
+                .dead(dead)
+                .done(done)
+                .total(pending + sent + failed + dead + done)
+                .build();
+        return Result.success(vo);
+    }
+
+    @PostMapping("/mq-task-replay-dead")
+    @BusinessOperation(
+            action = "MQ_REPLAY_DEAD_TASKS",
+            targetType = "MQ_ACTIVITY_STATUS_TASK",
+            targetIdParam = "limit",
+            targetNameParam = "limit",
+            detail = "manual replay of dead mq activity status tasks"
+    )
+    public Result replayDeadTasks(@AuthenticationPrincipal UserPrincipal principal,
+                                  @RequestParam(value = "limit", required = false, defaultValue = "100") Integer limit) {
+        ensureSuperAdmin(principal);
+        int normalizedLimit = normalizeReplayLimit(limit);
+        int replayed = activityStatusTaskService.replayDeadTasks(normalizedLimit);
+        Map<String, Object> data = new HashMap<>();
+        data.put("replayed", replayed);
+        data.put("limit", normalizedLimit);
+        return Result.success(data);
+    }
+
+    private int normalizeReplayLimit(Integer limit) {
+        if (limit == null) {
+            return DEFAULT_REPLAY_LIMIT;
+        }
+        return Math.max(MIN_REPLAY_LIMIT, Math.min(limit, MAX_REPLAY_LIMIT));
+    }
+
+    private int normalizeLogSize(Integer size) {
+        if (size == null) {
+            return DEFAULT_LOG_SIZE;
+        }
+        return Math.max(MIN_LOG_SIZE, Math.min(size, MAX_LOG_SIZE));
+    }
+
+    private void ensureSuperAdmin(UserPrincipal principal) {
+        AuthorizationGuards.requireSuperAdmin(principal, SecurityContextHolder.getContext().getAuthentication());
     }
 }

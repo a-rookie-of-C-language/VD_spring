@@ -6,13 +6,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.Base64;
 
@@ -29,16 +31,27 @@ public class FileUploadService {
     @Value("${app.upload.attachment-path:attachments}")
     private String attachmentPath;
 
+    public FileUploadService() {
+        this("uploads", "covers", "attachments");
+    }
+
+    FileUploadService(String basePath, String coverPath, String attachmentPath) {
+        this.basePath = basePath;
+        this.coverPath = coverPath;
+        this.attachmentPath = attachmentPath;
+    }
+
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
     private static final long MAX_ATTACHMENT_SIZE = 50 * 1024 * 1024; // 50MB for attachments
+    private static final int MAX_STORED_FILENAME_BASE_LENGTH = 80;
 
-    private static final List<String> ALLOWED_EXTENSIONS = Arrays.asList("jpg", "jpeg", "png", "gif", "webp");
-    private static final List<String> ALLOWED_CONTENT_TYPES = Arrays.asList(
+    private static final List<String> ALLOWED_EXTENSIONS = List.of("jpg", "jpeg", "png", "gif", "webp");
+    private static final List<String> ALLOWED_CONTENT_TYPES = List.of(
             "image/jpeg", "image/png", "image/gif", "image/webp"
     );
 
     // Allowed attachment extensions (documents, images, archives, etc.)
-    private static final List<String> ALLOWED_ATTACHMENT_EXTENSIONS = Arrays.asList(
+    private static final List<String> ALLOWED_ATTACHMENT_EXTENSIONS = List.of(
             "pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx",
             "txt", "md", "csv",
             "jpg", "jpeg", "png", "gif", "webp", "bmp",
@@ -54,54 +67,21 @@ public class FileUploadService {
      * @throws IllegalArgumentException if validation fails
      */
     public String uploadCoverImage(MultipartFile file) throws IOException {
-        // Validate file is not empty
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("File cannot be empty");
-        }
-
-        // Validate file size
-        if (file.getSize() > MAX_FILE_SIZE) {
-            throw new IllegalArgumentException("File size cannot exceed 3MB");
-        }
-
-        // Validate content type
+        validateFileNotEmpty(file);
+        validateMaxSize(file, MAX_FILE_SIZE, "File size cannot exceed 20MB");
         String contentType = file.getContentType();
-        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase())) {
+        if (contentType == null || !ALLOWED_CONTENT_TYPES.contains(contentType.toLowerCase(Locale.ROOT))) {
             throw new IllegalArgumentException("Only image formats are supported: jpg, jpeg, png, gif, webp");
         }
 
-        // Validate file extension
-        String originalFilename = file.getOriginalFilename();
-        if (originalFilename == null) {
-            throw new IllegalArgumentException("Filename cannot be empty");
-        }
-
-        String extension = FilenameUtils.getExtension(originalFilename).toLowerCase();
-        if (!ALLOWED_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException("Only image formats are supported: jpg, jpeg, png, gif, webp");
-        }
-
-        // Generate unique filename
+        String extension = requireAllowedExtension(
+                requireOriginalFilename(file),
+                ALLOWED_EXTENSIONS,
+                "Only image formats are supported: jpg, jpeg, png, gif, webp"
+        );
         String newFilename = UUID.randomUUID().toString() + "." + extension;
 
-        // Create directory if not exists
-        Path uploadPath = Paths.get(basePath, coverPath);
-        File uploadDir = uploadPath.toFile();
-        if (!uploadDir.exists()) {
-            boolean created = uploadDir.mkdirs();
-            if (!created) {
-                throw new IOException("Failed to create upload directory");
-            }
-        }
-
-        // Save file
-        Path filePath = uploadPath.resolve(newFilename);
-        Files.copy(file.getInputStream(), filePath);
-
-        log.info("File uploaded successfully: {}", filePath);
-
-        // Return relative path
-        return "/" + coverPath + "/" + newFilename;
+        return storeFile(file, coverPath, newFilename, "File");
     }
 
     /**
@@ -111,28 +91,7 @@ public class FileUploadService {
      * @return true if deleted successfully
      */
     public boolean deleteCoverImage(String relativePath) {
-        if (relativePath == null || relativePath.isEmpty()) {
-            return false;
-        }
-
-        try {
-            // Remove leading slash if present
-            String path = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
-            Path filePath = Paths.get(basePath, path);
-            File file = filePath.toFile();
-
-            if (file.exists() && file.isFile()) {
-                boolean deleted = file.delete();
-                if (deleted) {
-                    log.info("File deleted successfully: {}", filePath);
-                }
-                return deleted;
-            }
-        } catch (Exception e) {
-            log.error("Failed to delete file: {}", relativePath, e);
-        }
-
-        return false;
+        return deleteFile(relativePath, "File");
     }
 
     public String readCoverImageAsDataUrl(String relativePath) {
@@ -140,9 +99,8 @@ public class FileUploadService {
             return null;
         }
         try {
-            String path = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
-            Path filePath = Paths.get(basePath, path);
-            if (!Files.exists(filePath)) {
+            Path filePath = resolveExistingFilePath(relativePath);
+            if (filePath == null) {
                 return null;
             }
             byte[] bytes = Files.readAllBytes(filePath);
@@ -159,7 +117,7 @@ public class FileUploadService {
             }
             String b64 = Base64.getEncoder().encodeToString(bytes);
             return "data:" + ct + ";base64," + b64;
-        } catch (Exception e) {
+        } catch (IOException e) {
             return null;
         }
     }
@@ -176,22 +134,13 @@ public class FileUploadService {
         }
 
         // Verify file exists
-        String normalizedPath = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
-        Path filePath = Paths.get(basePath, normalizedPath);
-        if (!Files.exists(filePath)) {
+        Path filePath = resolveExistingFilePath(relativePath);
+        if (filePath == null) {
             return null;
         }
 
-        // Return path with /files prefix for AttachmentController
-        // Input: /covers/xxx.png -> Output: /files/covers/xxx.png
-        if (relativePath.startsWith("/covers/")) {
-            return "/files" + relativePath;
-        } else if (relativePath.startsWith("covers/")) {
-            return "/files/" + relativePath;
-        } else {
-            // Handle legacy paths without /covers/ prefix
-            return "/files/covers" + (relativePath.startsWith("/") ? "" : "/") + relativePath;
-        }
+        String normalizedPath = normalizeRelativePath(relativePath);
+        return normalizedPath == null ? null : "/" + normalizedPath;
     }
 
     /**
@@ -203,49 +152,19 @@ public class FileUploadService {
      * @throws IllegalArgumentException if validation fails
      */
     public String uploadAttachment(MultipartFile file) throws IOException {
-        // Validate file is not empty
-        if (file.isEmpty()) {
-            throw new IllegalArgumentException("File cannot be empty");
-        }
+        validateFileNotEmpty(file);
+        validateMaxSize(file, MAX_ATTACHMENT_SIZE, "File size cannot exceed 50MB");
 
-        // Validate file size
-        if (file.getSize() > MAX_ATTACHMENT_SIZE) {
-            throw new IllegalArgumentException("File size cannot exceed 50MB");
-        }
-
-        // Validate file extension
-        String filename = file.getOriginalFilename();
-        if (filename == null) {
-            throw new IllegalArgumentException("Filename cannot be empty");
-        }
-
-        String extension = FilenameUtils.getExtension(filename).toLowerCase();
-        if (!ALLOWED_ATTACHMENT_EXTENSIONS.contains(extension)) {
-            throw new IllegalArgumentException("File type not supported. Allowed types: " + ALLOWED_ATTACHMENT_EXTENSIONS);
-        }
-
-        // Generate unique filename while preserving original name info
-        String baseName = FilenameUtils.getBaseName(filename);
+        String filename = requireOriginalFilename(file);
+        String extension = requireAllowedExtension(
+                filename,
+                ALLOWED_ATTACHMENT_EXTENSIONS,
+                "File type not supported. Allowed types: " + ALLOWED_ATTACHMENT_EXTENSIONS
+        );
+        String baseName = sanitizeFilenameBase(FilenameUtils.getBaseName(filename));
         String newFilename = UUID.randomUUID().toString() + "_" + baseName + "." + extension;
 
-        // Create directory if not exists
-        Path uploadPath = Paths.get(basePath, attachmentPath);
-        File uploadDir = uploadPath.toFile();
-        if (!uploadDir.exists()) {
-            boolean created = uploadDir.mkdirs();
-            if (!created) {
-                throw new IOException("Failed to create upload directory");
-            }
-        }
-
-        // Save file
-        Path filePath = uploadPath.resolve(newFilename);
-        Files.copy(file.getInputStream(), filePath);
-
-        log.info("Attachment uploaded successfully: {}", filePath);
-
-        // Return relative path
-        return "/" + attachmentPath + "/" + newFilename;
+        return storeFile(file, attachmentPath, newFilename, "Attachment");
     }
 
     /**
@@ -255,28 +174,7 @@ public class FileUploadService {
      * @return true if deleted successfully
      */
     public boolean deleteAttachment(String relativePath) {
-        if (relativePath == null || relativePath.isEmpty()) {
-            return false;
-        }
-
-        try {
-            // Remove leading slash if present
-            String path = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
-            Path filePath = Paths.get(basePath, path);
-            File file = filePath.toFile();
-
-            if (file.exists() && file.isFile()) {
-                boolean deleted = file.delete();
-                if (deleted) {
-                    log.info("Attachment deleted successfully: {}", filePath);
-                }
-                return deleted;
-            }
-        } catch (Exception e) {
-            log.error("Failed to delete attachment: {}", relativePath, e);
-        }
-
-        return false;
+        return deleteFile(relativePath, "Attachment");
     }
 
     /**
@@ -291,26 +189,150 @@ public class FileUploadService {
         }
 
         try {
-            String path = relativePath.startsWith("/") ? relativePath.substring(1) : relativePath;
-            Path filePath = Paths.get(basePath, path);
-
-            if (!Files.exists(filePath)) {
+            Path filePath = resolveExistingFilePath(relativePath);
+            if (filePath == null) {
                 return null;
             }
 
-            File file = filePath.toFile();
-            String filename = file.getName();
+            String filename = filePath.getFileName().toString();
 
             java.util.Map<String, Object> info = new java.util.HashMap<>();
             info.put("fileName", filename);
             info.put("filePath", relativePath);
-            info.put("fileSize", file.length());
+            info.put("fileSize", Files.size(filePath));
             info.put("fileType", FilenameUtils.getExtension(filename));
 
             return info;
-        } catch (Exception e) {
+        } catch (IOException e) {
             log.error("Failed to get file info: {}", relativePath, e);
             return null;
         }
+    }
+
+    private Path resolveExistingFilePath(String relativePath) {
+        String normalizedPath = normalizeRelativePath(relativePath);
+        if (normalizedPath == null) {
+            return null;
+        }
+        Path root = Paths.get(basePath).toAbsolutePath().normalize();
+        Path filePath = root.resolve(normalizedPath).normalize();
+        if (!filePath.startsWith(root) || !Files.isRegularFile(filePath)) {
+            return null;
+        }
+        return filePath;
+    }
+
+    private String storeFile(MultipartFile file, String directory, String filename, String label) throws IOException {
+        Path uploadPath = resolveUploadDirectory(directory);
+        Path filePath = uploadPath.resolve(filename).normalize();
+        if (!filePath.startsWith(uploadPath)) {
+            throw new IOException("Invalid upload filename");
+        }
+
+        try (InputStream inputStream = file.getInputStream()) {
+            Files.copy(inputStream, filePath);
+        }
+
+        log.info("{} uploaded successfully: {}", label, filePath);
+        return "/" + normalizeConfiguredPath(directory) + "/" + filename;
+    }
+
+    private boolean deleteFile(String relativePath, String label) {
+        if (relativePath == null || relativePath.isEmpty()) {
+            return false;
+        }
+
+        try {
+            Path filePath = resolveExistingFilePath(relativePath);
+            if (filePath == null) {
+                return false;
+            }
+            boolean deleted = Files.deleteIfExists(filePath);
+            if (deleted) {
+                log.info("{} deleted successfully: {}", label, filePath);
+            }
+            return deleted;
+        } catch (IOException e) {
+            log.error("Failed to delete {}: {}", label.toLowerCase(), relativePath, e);
+            return false;
+        }
+    }
+
+    private void validateFileNotEmpty(MultipartFile file) {
+        if (file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be empty");
+        }
+    }
+
+    private void validateMaxSize(MultipartFile file, long maxSize, String message) {
+        if (file.getSize() > maxSize) {
+            throw new IllegalArgumentException(message);
+        }
+    }
+
+    private String requireOriginalFilename(MultipartFile file) {
+        String filename = file.getOriginalFilename();
+        if (filename == null) {
+            throw new IllegalArgumentException("Filename cannot be empty");
+        }
+        return filename;
+    }
+
+    private String requireAllowedExtension(String filename, Collection<String> allowedExtensions, String message) {
+        String extension = FilenameUtils.getExtension(filename).toLowerCase(Locale.ROOT);
+        if (!allowedExtensions.contains(extension)) {
+            throw new IllegalArgumentException(message);
+        }
+        return extension;
+    }
+
+    private Path resolveUploadDirectory(String directory) throws IOException {
+        String normalizedDirectory = normalizeConfiguredPath(directory);
+        Path root = Paths.get(basePath).toAbsolutePath().normalize();
+        Path uploadPath = root.resolve(normalizedDirectory).normalize();
+        if (!uploadPath.startsWith(root)) {
+            throw new IOException("Upload directory must stay inside upload root");
+        }
+        Files.createDirectories(uploadPath);
+        return uploadPath;
+    }
+
+    private String normalizeConfiguredPath(String path) throws IOException {
+        String normalizedPath = normalizeRelativePath(path);
+        if (normalizedPath == null) {
+            throw new IOException("Invalid upload directory");
+        }
+        return normalizedPath;
+    }
+
+    private String normalizeRelativePath(String relativePath) {
+        if (relativePath == null || relativePath.isBlank()) {
+            return null;
+        }
+        String path = relativePath.trim().replace('\\', '/');
+        while (path.startsWith("/")) {
+            path = path.substring(1);
+        }
+        try {
+            if (path.isBlank() || path.contains("..") || path.contains(":") || Paths.get(path).isAbsolute()) {
+                return null;
+            }
+        } catch (InvalidPathException e) {
+            return null;
+        }
+        return path;
+    }
+
+    private String sanitizeFilenameBase(String baseName) {
+        if (baseName == null || baseName.isBlank()) {
+            return "file";
+        }
+        String sanitized = baseName.replaceAll("[^A-Za-z0-9._-]", "_");
+        if (sanitized.isBlank()) {
+            return "file";
+        }
+        return sanitized.length() <= MAX_STORED_FILENAME_BASE_LENGTH
+                ? sanitized
+                : sanitized.substring(0, MAX_STORED_FILENAME_BASE_LENGTH);
     }
 }

@@ -27,7 +27,8 @@ public class ActivityQueryVO {
     private String startFrom;  // ISO-8601 OffsetDateTime string
     private String startTo;    // ISO-8601 OffsetDateTime string
     private Boolean isFull;
+    private String cursorStartTime; // ISO-8601 OffsetDateTime string
+    private String cursorId;        // tie-break for identical startTime
     private String sortBy;     // Optional: sorting field
     private String sortOrder;  // Optional: "asc" or "desc"
 }
-

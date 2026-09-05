@@ -12,6 +12,7 @@ import site.arookieofc.security.AuthorizationGuards;
 import site.arookieofc.security.UserPrincipal;
 import site.arookieofc.service.SuggestionService;
 import site.arookieofc.service.dto.SuggestionDTO;
+import site.arookieofc.util.PaginationUtils;
 
 import java.util.HashMap;
 import java.util.List;
@@ -29,6 +30,9 @@ public class SuggestionController {
     @PostMapping
     public Result createSuggestion(@AuthenticationPrincipal UserPrincipal principal,
                                     @RequestBody CreateSuggestionRequest request) {
+        if (request == null) {
+            throw BusinessException.badRequest("INVALID_REQUEST_BODY");
+        }
         if (request.getTitle() == null || request.getTitle().trim().isEmpty()) {
             throw BusinessException.badRequest("Title is required");
         }
@@ -37,10 +41,11 @@ public class SuggestionController {
             throw BusinessException.badRequest("Content is required");
         }
 
+        String studentNo = AuthorizationGuards.requireStudentNo(principal);
         SuggestionDTO dto = suggestionService.createSuggestion(
                 request.getTitle(),
                 request.getContent(),
-                principal.getStudentNo()
+                studentNo
         );
 
         SuggestionVO vo = SuggestionVO.fromDTO(dto);
@@ -51,9 +56,12 @@ public class SuggestionController {
     public Result getMySuggestions(@AuthenticationPrincipal UserPrincipal principal,
                                     @RequestParam(value = "page", required = false, defaultValue = "1") int page,
                                     @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize) {
-        int total = suggestionService.countMySuggestions(principal.getStudentNo());
+        page = PaginationUtils.normalizePage(page);
+        pageSize = PaginationUtils.normalizePageSize(pageSize);
+        String studentNo = AuthorizationGuards.requireStudentNo(principal);
+        int total = suggestionService.countMySuggestions(studentNo);
         List<SuggestionDTO> dtos = suggestionService.getMySuggestions(
-                principal.getStudentNo(), page, pageSize);
+                studentNo, page, pageSize);
 
         List<SuggestionVO> items = dtos.stream()
                 .map(SuggestionVO::fromDTO)
@@ -72,6 +80,8 @@ public class SuggestionController {
                                      @RequestParam(value = "pageSize", required = false, defaultValue = "10") int pageSize,
                                      @RequestParam(value = "status", required = false) String statusStr) {
         AuthorizationGuards.requireAdmin(principal);
+        page = PaginationUtils.normalizePage(page);
+        pageSize = PaginationUtils.normalizePageSize(pageSize);
 
         SuggestionStatus status = null;
         if (statusStr != null && !statusStr.trim().isEmpty()) {
@@ -102,6 +112,9 @@ public class SuggestionController {
                                   @RequestBody ReplySuggestionRequest request) {
         AuthorizationGuards.requireAdmin(principal);
 
+        if (request == null) {
+            throw BusinessException.badRequest("INVALID_REQUEST_BODY");
+        }
         if (request.getReplyContent() == null || request.getReplyContent().trim().isEmpty()) {
             throw BusinessException.badRequest("Reply content is required");
         }

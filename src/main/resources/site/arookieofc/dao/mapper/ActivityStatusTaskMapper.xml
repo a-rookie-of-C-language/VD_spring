@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.ActivityStatusTaskMapper">
+
+    <resultMap id="ActivityStatusTaskResultMap" type="site.arookieofc.dao.entity.ActivityStatusTask">
+        <id column="id" property="id"/>
+        <result column="event_id" property="eventId"/>
+        <result column="activity_id" property="activityId"/>
+        <result column="target_status" property="targetStatus"/>
+        <result column="source" property="source"/>
+        <result column="execute_at" property="executeAt"/>
+        <result column="status" property="status"/>
+        <result column="attempt" property="attempt"/>
+        <result column="last_error" property="lastError"/>
+        <result column="next_retry_at" property="nextRetryAt"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <insert id="insert" parameterType="site.arookieofc.dao.entity.ActivityStatusTask" useGeneratedKeys="true" keyProperty="id">
+        INSERT INTO activity_status_tasks
+        (event_id, activity_id, target_status, source, execute_at, status, attempt, last_error, next_retry_at, created_at, updated_at)
+        VALUES
+        (#{eventId}, #{activityId}, #{targetStatus}, #{source}, #{executeAt}, #{status}, #{attempt}, #{lastError}, #{nextRetryAt}, #{createdAt}, #{updatedAt})
+    </insert>
+
+    <select id="getByEventId" resultMap="ActivityStatusTaskResultMap">
+        SELECT id, event_id, activity_id, target_status, source, execute_at, status, attempt, last_error, next_retry_at, created_at, updated_at
+        FROM activity_status_tasks
+        WHERE event_id = #{eventId}
+        LIMIT 1
+    </select>
+
+    <select id="listDispatchable" resultMap="ActivityStatusTaskResultMap">
+        SELECT id, event_id, activity_id, target_status, source, execute_at, status, attempt, last_error, next_retry_at, created_at, updated_at
+        FROM activity_status_tasks
+        WHERE status IN ('PENDING', 'FAILED')
+          AND (next_retry_at IS NULL OR next_retry_at &lt;= #{now})
+        UNION ALL
+        SELECT id, event_id, activity_id, target_status, source, execute_at, status, attempt, last_error, next_retry_at, created_at, updated_at
+        FROM activity_status_tasks
+        WHERE status = 'SENT'
+          AND updated_at &lt;= #{sentBefore}
+        ORDER BY updated_at ASC
+        LIMIT #{limit}
+    </select>
+
+    <update id="markSent">
+        UPDATE activity_status_tasks
+        SET status = 'SENT',
+            updated_at = #{updatedAt}
+        WHERE event_id = #{eventId}
+          AND status IN ('PENDING', 'FAILED', 'SENT')
+    </update>
+
+    <update id="markDone">
+        UPDATE activity_status_tasks
+        SET status = 'DONE',
+            updated_at = #{updatedAt},
+            next_retry_at = NULL
+        WHERE event_id = #{eventId}
+          AND status != 'DONE'
+    </update>
+
+    <update id="markFailed">
+        UPDATE activity_status_tasks
+        SET status = 'FAILED',
+            attempt = #{attempt},
+            last_error = #{lastError},
+            next_retry_at = #{nextRetryAt},
+            updated_at = #{updatedAt}
+        WHERE event_id = #{eventId}
+          AND status != 'DONE'
+    </update>
+
+    <update id="markDead">
+        UPDATE activity_status_tasks
+        SET status = 'DEAD',
+            attempt = #{attempt},
+            last_error = #{lastError},
+            next_retry_at = NULL,
+            updated_at = #{updatedAt}
+        WHERE event_id = #{eventId}
+          AND status != 'DONE'
+    </update>
+
+    <select id="countByStatus" resultType="java.util.HashMap">
+        SELECT status, COUNT(1) AS cnt
+        FROM activity_status_tasks
+        GROUP BY status
+    </select>
+
+    <update id="replayDeadTasks">
+        UPDATE activity_status_tasks
+        SET status = 'PENDING',
+            attempt = 0,
+            last_error = NULL,
+            next_retry_at = NULL,
+            updated_at = #{updatedAt}
+        WHERE status = 'DEAD'
+        ORDER BY updated_at ASC
+        LIMIT #{limit}
+    </update>
+
+</mapper>

@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="site.arookieofc.dao.mapper.MyActivityMapper">
+
+    <select id="countMyActivities" resultType="int">
+        SELECT COUNT(*) FROM (
+            SELECT a.id
+            FROM activities a
+            INNER JOIN activity_participants ap ON a.id = ap.activity_id
+            WHERE ap.student_no = #{studentNo}
+            UNION ALL
+            SELECT pa.id
+            FROM pending_activities pa
+            WHERE pa.submitted_by = #{studentNo}
+            UNION ALL
+            SELECT pbi.id
+            FROM pending_batch_imports pbi
+            WHERE pbi.submitted_by = #{studentNo}
+              AND pbi.status IN ('PENDING', 'REJECTED')
+        ) t
+    </select>
+
+    <select id="listMyActivitiesPaged" resultType="java.util.HashMap">
+        SELECT * FROM (
+            SELECT a.id, 'ACTIVITY' AS source, a.name, a.type, a.status,
+                   a.functionary, NULL AS submitted_by, a.description, a.duration,
+                   a.start_time AS start_time, a.expected_end_time,
+                   a.cover_path, a.is_full, a.max_participants, a.rejected_reason,
+                   NULL AS created_at, a.reviewed_at, a.reviewed_by
+            FROM activities a
+            INNER JOIN activity_participants ap ON a.id = ap.activity_id
+            WHERE ap.student_no = #{studentNo}
+
+            UNION ALL
+
+            SELECT pa.id, 'PENDING_ACTIVITY' AS source, pa.name, pa.type, pa.status,
+                   pa.functionary, pa.submitted_by, pa.description, pa.duration,
+                   NULL AS start_time, NULL AS expected_end_time,
+                   pa.cover_path, NULL AS is_full, NULL AS max_participants, pa.rejected_reason,
+                   pa.created_at, pa.reviewed_at, pa.reviewed_by
+            FROM pending_activities pa
+            WHERE pa.submitted_by = #{studentNo}
+
+            UNION ALL
+
+            SELECT pbi.id, 'BATCH_IMPORT' AS source, pbi.original_filename AS name, NULL AS type, pbi.status,
+                   NULL AS functionary, pbi.submitted_by, NULL AS description, NULL AS duration,
+                   NULL AS start_time, NULL AS expected_end_time,
+                   NULL AS cover_path, NULL AS is_full, NULL AS max_participants, pbi.rejected_reason,
+                   pbi.created_at, pbi.reviewed_at, pbi.reviewed_by
+            FROM pending_batch_imports pbi
+            WHERE pbi.submitted_by = #{studentNo}
+              AND pbi.status IN ('PENDING', 'REJECTED')
+        ) combined
+        ORDER BY COALESCE(created_at, start_time) DESC
+        LIMIT #{limit} OFFSET #{offset}
+    </select>
+
+</mapper>

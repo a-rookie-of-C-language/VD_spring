@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import site.arookieofc.common.exception.BusinessException;
 import site.arookieofc.dao.entity.Activity;
 import site.arookieofc.dao.entity.PersonalHourRequest;
 import site.arookieofc.dao.entity.User;
@@ -17,7 +18,10 @@ import site.arookieofc.service.BO.ActivityStatus;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -56,20 +60,21 @@ public class VolunteerHourGrantService {
     public boolean grantHoursToUser(String studentNo, Double duration,
                                    String sourceType, String sourceId, String sourceName) {
         // 参数校验
-        if (studentNo == null || studentNo.trim().isEmpty()) {
+        String normalizedStudentNo = normalizeStudentNo(studentNo);
+        if (normalizedStudentNo == null) {
             log.warn("Invalid studentNo: {}", studentNo);
             return false;
         }
 
         if (duration == null || duration <= 0) {
-            log.warn("Invalid duration for student {}: {}", studentNo, duration);
+            log.warn("Invalid duration for student {}: {}", normalizedStudentNo, duration);
             return false;
         }
 
         // 检查用户是否存在
-        User user = userMapper.getUserByStudentNo(studentNo);
+        User user = userMapper.getUserByStudentNo(normalizedStudentNo);
         if (user == null) {
-            log.error("User not found: {}", studentNo);
+            log.error("User not found: {}", normalizedStudentNo);
             return false;
         }
 
@@ -77,7 +82,7 @@ public class VolunteerHourGrantService {
 
         VolunteerHourGrantRecord record = VolunteerHourGrantRecord.builder()
                 .id(UUID.randomUUID().toString())
-                .studentNo(studentNo)
+                .studentNo(normalizedStudentNo)
                 .sourceType(sourceType)
                 .sourceId(sourceId)
                 .sourceName(sourceName)
@@ -89,162 +94,118 @@ public class VolunteerHourGrantService {
             volunteerHourGrantRecordMapper.insert(record);
         } catch (DuplicateKeyException e) {
             log.warn("Duplicate hour grant skipped: student={}, sourceType={}, sourceId={}",
-                    studentNo, sourceType, sourceId);
+                    normalizedStudentNo, sourceType, sourceId);
             return false;
         }
 
         // 原子递增，避免并发下读-改-写覆盖
-        int updated = userMapper.incrementTotalHours(studentNo, duration);
+        int updated = userMapper.incrementTotalHours(normalizedStudentNo, duration);
         if (updated == 0) {
-            log.error("Failed to increment total hours for student: {}", studentNo);
-            throw new IllegalStateException("Failed to increment total hours for student: " + studentNo);
+            log.error("Failed to increment total hours for student: {}", normalizedStudentNo);
+            throw new IllegalStateException("Failed to increment total hours for student: " + normalizedStudentNo);
         }
 
         Double after = before + duration;
 
         // 记录日志
         log.info("Hours granted successfully: student={}, duration={}, before~={}, after~={}, source={}, id={}, name={}",
-                studentNo, duration, before, after, sourceType, sourceId, sourceName);
+                normalizedStudentNo, duration, before, after, sourceType, sourceId, sourceName);
 
         return true;
     }
 
     /**
      * 活动结束后为所有参与者发放时长
-     *
-     * @param activityId 活动ID
-     * @return 成功发放的人数
      */
     @Transactional
     public int grantHoursForCompletedActivity(String activityId) {
-        Activity activity = activityMapper.getById(activityId);
-        if (activity == null) {
-            log.error("Activity not found: {}", activityId);
-            throw new IllegalArgumentException("NOT_FOUND");
-        }
-
-        // 只有已结束的活动才发放时长
+        Activity activity = requireActivity(activityId);
         if (activity.getStatus() != ActivityStatus.ActivityEnded) {
-            log.warn("Activity not ended yet: {}, current status: {}", activityId, activity.getStatus());
+            log.warn("Activity not ended: {}, status: {}", activityId, activity.getStatus());
             return 0;
         }
-
-        // 检查活动时长
-        Double duration = activity.getDuration();
-        if (duration == null || duration <= 0) {
-            log.warn("Invalid activity duration: {}, duration: {}", activityId, duration);
-            return 0;
-        }
-
-        // 获取参与者列表
-        List<String> participants = activity.getParticipants();
-        if (participants == null || participants.isEmpty()) {
-            log.info("No participants for activity: {}", activityId);
-            return 0;
-        }
-
-        // 为每个参与者发放时长
-        int granted = 0;
-        String sourceType = activity.getImported() != null && activity.getImported() ? SOURCE_IMPORT : SOURCE_ACTIVITY;
-
-        for (String studentNo : participants) {
-            boolean success = grantHoursToUser(
-                studentNo,
-                duration,
-                sourceType,
-                activityId,
-                activity.getName()
-            );
-            if (success) {
-                granted++;
-            }
-        }
-
-        log.info("Activity hours granted: activityId={}, activityName={}, totalParticipants={}, granted={}, duration={}",
-                activityId, activity.getName(), participants.size(), granted, duration);
-
-        return granted;
+        String sourceType = Boolean.TRUE.equals(activity.getImported()) ? SOURCE_IMPORT : SOURCE_ACTIVITY;
+        return grantToParticipants(activity.getParticipants(), activity.getDuration(),
+                sourceType, activityId, activity.getName());
     }
 
     /**
      * 个人时长申请通过后发放时长
-     *
-     * @param requestId 申请ID
-     * @return 是否发放成功
      */
     @Transactional
     public boolean grantHoursForApprovedRequest(String requestId) {
         PersonalHourRequest request = personalHourRequestMapper.getById(requestId);
         if (request == null) {
-            log.error("Personal hour request not found: {}", requestId);
-            throw new IllegalArgumentException("NOT_FOUND");
+            throw BusinessException.notFound("NOT_FOUND");
         }
-
-        // 只有已通过的申请才发放
         if (request.getStatus() != ActivityStatus.ActivityEnded) {
-            log.warn("Request not approved: {}, current status: {}", requestId, request.getStatus());
+            log.warn("Request not approved: {}, status: {}", requestId, request.getStatus());
             return false;
         }
-
-        boolean success = grantHoursToUser(
-            request.getApplicantStudentNo(),
-            request.getDuration(),
-            SOURCE_PERSONAL_REQUEST,
-            requestId,
-            request.getName()
-        );
-
-        if (success) {
-            log.info("Personal request hours granted: requestId={}, requestName={}, applicant={}, duration={}",
-                    requestId, request.getName(), request.getApplicantStudentNo(), request.getDuration());
-        }
-
-        return success;
+        return grantHoursToUser(request.getApplicantStudentNo(), request.getDuration(),
+                SOURCE_PERSONAL_REQUEST, requestId, request.getName());
     }
 
     /**
      * 批量导入活动通过后为所有参与者发放时长
-     * 此方法主要用于后台直接导入的场景，通常会在导入时直接调用 grantHoursForCompletedActivity
-     *
-     * @param activityId 导入生成的活动ID
-     * @param participants 参与者列表
-     * @param duration 活动时长
-     * @param activityName 活动名称
-     * @return 成功发放的人数
      */
     @Transactional
-    public int grantHoursForImportedActivity(String activityId,
-                                            List<String> participants,
-                                            Double duration,
-                                            String activityName) {
-        if (participants == null || participants.isEmpty()) {
-            log.info("No participants for imported activity: {}", activityId);
-            return 0;
-        }
+    public int grantHoursForImportedActivity(String activityId, List<String> participants,
+                                             Double duration, String activityName) {
+        return grantToParticipants(participants, duration, SOURCE_IMPORT, activityId,
+                activityName != null ? activityName : "导入活动");
+    }
 
+    // ── Internal helpers ──
+
+    private int grantToParticipants(List<String> participants, Double duration,
+                                    String sourceType, String sourceId, String sourceName) {
+        List<String> normalizedParticipants = normalizeParticipants(participants);
+        if (normalizedParticipants.isEmpty()) return 0;
         if (duration == null || duration <= 0) {
-            log.warn("Invalid imported activity duration: {}, duration: {}", activityId, duration);
+            log.warn("Invalid duration for {}: {}", sourceId, duration);
             return 0;
         }
-
         int granted = 0;
-        for (String studentNo : participants) {
-            boolean success = grantHoursToUser(
-                studentNo,
-                duration,
-                SOURCE_IMPORT,
-                activityId,
-                activityName != null ? activityName : "导入活动"
-            );
-            if (success) {
+        for (String studentNo : normalizedParticipants) {
+            if (grantHoursToUser(studentNo, duration, sourceType, sourceId, sourceName)) {
                 granted++;
             }
         }
-
-        log.info("Imported activity hours granted: activityId={}, activityName={}, totalParticipants={}, granted={}, duration={}",
-                activityId, activityName, participants.size(), granted, duration);
-
+        log.info("Hours granted: id={}, name={}, total={}, granted={}, duration={}",
+                sourceId, sourceName, normalizedParticipants.size(), granted, duration);
         return granted;
+    }
+
+    private List<String> normalizeParticipants(List<String> participants) {
+        if (participants == null || participants.isEmpty()) {
+            return List.of();
+        }
+        Set<String> normalized = new LinkedHashSet<>();
+        for (String participant : participants) {
+            String studentNo = normalizeStudentNo(participant);
+            if (studentNo != null) {
+                normalized.add(studentNo);
+            }
+        }
+        return new ArrayList<>(normalized);
+    }
+
+    private String normalizeStudentNo(String studentNo) {
+        if (studentNo == null) {
+            return null;
+        }
+        String trimmed = studentNo.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private Activity requireActivity(String activityId) {
+        Activity activity = activityMapper.getById(activityId);
+        if (activity == null) {
+            log.error("Activity not found: {}", activityId);
+            throw BusinessException.notFound("NOT_FOUND");
+        }
+        return activity;
     }
 
     /**
@@ -261,4 +222,3 @@ public class VolunteerHourGrantService {
         return user.getTotalHours() != null ? user.getTotalHours() : 0.0;
     }
 }
-

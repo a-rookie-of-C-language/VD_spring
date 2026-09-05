@@ -1,38 +1,45 @@
 package site.arookieofc.service.messaging;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
-import org.springframework.stereotype.Component;
 import site.arookieofc.dao.entity.Activity;
 import site.arookieofc.dao.mapper.ActivityMapper;
 import site.arookieofc.service.BO.ActivityStatus;
-import org.springframework.amqp.core.Message;
-import org.springframework.amqp.core.MessageProperties;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import site.arookieofc.configuration.RabbitConfig;
 
 import java.time.*;
 import java.util.List;
 
 @Slf4j
 @Component
-@RequiredArgsConstructor
 public class ActivityStartupSynchronizer {
     private final ActivityMapper activityMapper;
-    private final RabbitTemplate rabbitTemplate;
+    private final ActivityStatusTaskService activityStatusTaskService;
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     
     @Value("${app.messaging.dev-mode-trigger:false}")
     private boolean devModeTrigger;
 
+    public ActivityStartupSynchronizer(ActivityMapper activityMapper,
+                                       ActivityStatusTaskService activityStatusTaskService) {
+        this(activityMapper, activityStatusTaskService, false);
+    }
+
+    ActivityStartupSynchronizer(ActivityMapper activityMapper,
+                                ActivityStatusTaskService activityStatusTaskService,
+                                boolean devModeTrigger) {
+        this.activityMapper = activityMapper;
+        this.activityStatusTaskService = activityStatusTaskService;
+        this.devModeTrigger = devModeTrigger;
+    }
+
     @EventListener(ApplicationReadyEvent.class)
     public void synchronizeActivitiesOnStartup() {
         log.info("Application started. Synchronizing activity statuses... (Dev Mode Trigger: {})", devModeTrigger);
         try {
-            List<Activity> activities = activityMapper.listAll();
+            List<Activity> activities = activityMapper.listAllBase();
             int updated = 0;
             int scheduled = 0;
             
@@ -73,7 +80,7 @@ public class ActivityStartupSynchronizer {
             } else {
                 log.info("Activity synchronization completed. Updated: {}, Scheduled: {}", updated, scheduled);
             }
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             log.error("Failed to synchronize activities on startup", e);
         }
     }
@@ -88,6 +95,9 @@ public class ActivityStartupSynchronizer {
         LocalDateTime eet = a.getEnrollmentEndTime();
         LocalDateTime st = a.getStartTime();
         LocalDateTime et = a.getExpectedEndTime();
+        if (est == null || eet == null || st == null || et == null) {
+            return;
+        }
         if (now.isBefore(est)) {
             a.setStatus(ActivityStatus.EnrollmentNotStart);
         } else if (now.isBefore(eet)) {
@@ -125,23 +135,8 @@ public class ActivityStartupSynchronizer {
         if (when == null) return;
         ZonedDateTime target = when.atZone(ZONE);
         long delayMs = Duration.between(now, target).toMillis();
-        
-        // Only schedule messages for future times
         if (delayMs <= 0) return;
-        
-        ActivityStatusUpdateMessage msg = new ActivityStatusUpdateMessage(id, status);
-        MessageProperties props = new MessageProperties();
-        props.setHeader("x-delay", delayMs);
-        props.setContentType(MessageProperties.CONTENT_TYPE_JSON);
-        byte[] body;
-        try {
-            body = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsBytes(msg);
-        } catch (Exception e) {
-            body = (id + "|" + status.name()).getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        }
-        Message amqpMsg = new Message(body, props);
-        rabbitTemplate.send(RabbitConfig.DELAY_EXCHANGE, RabbitConfig.DELAY_ROUTING_KEY, amqpMsg);
-        
-        log.debug("Scheduled status update for activity {} to {} in {}ms", id, status, delayMs);
+        activityStatusTaskService.scheduleStatusUpdate(id, status, when, "startup-sync");
+        log.debug("Scheduled status task for activity {} to {} in {}ms", id, status, delayMs);
     }
 }

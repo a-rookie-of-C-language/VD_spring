@@ -14,4 +14,7 @@ public class ActivityPageVO {
     private int total;
     private int page;
     private int pageSize;
+    private Boolean hasMore;
+    private String nextCursorStartTime;
+    private String nextCursorId;
 }

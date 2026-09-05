@@ -1,6 +1,7 @@
 package site.arookieofc.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.poi.EncryptedDocumentException;
 import org.apache.poi.ss.usermodel.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -38,6 +39,7 @@ public class ExcelParserService {
              Workbook workbook = WorkbookFactory.create(inputStream)) {
 
             Sheet sheet = workbook.getSheetAt(0);
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
 
             // Skip header row (row 0), start from row 1
             for (int i = 1; i <= sheet.getLastRowNum(); i++) {
@@ -51,14 +53,14 @@ public class ExcelParserService {
                     continue;
                 }
 
-                String studentNo = getCellValueAsString(cell);
+                String studentNo = getCellValueAsString(cell, evaluator);
                 if (studentNo != null && !studentNo.trim().isEmpty()) {
                     studentNumbers.add(studentNo.trim());
                 }
             }
 
             log.info("Parsed {} student numbers from Excel file", studentNumbers.size());
-        } catch (Exception e) {
+        } catch (IOException | EncryptedDocumentException | IllegalArgumentException e) {
             log.error("Failed to parse Excel file", e);
             throw new IOException("Failed to parse Excel file: " + e.getMessage(), e);
         }
@@ -69,7 +71,7 @@ public class ExcelParserService {
     /**
      * Get cell value as string regardless of cell type
      */
-    private String getCellValueAsString(Cell cell) {
+    private String getCellValueAsString(Cell cell, FormulaEvaluator evaluator) {
         if (cell == null) {
             return null;
         }
@@ -93,12 +95,35 @@ public class ExcelParserService {
             case BOOLEAN:
                 return String.valueOf(cell.getBooleanCellValue());
             case FORMULA:
-                return cell.getCellFormula();
+                return getFormulaValueAsString(cell, evaluator);
             case BLANK:
                 return "";
             default:
                 return "";
         }
+    }
+
+    private String getFormulaValueAsString(Cell cell, FormulaEvaluator evaluator) {
+        if (evaluator == null) {
+            return cell.getCellFormula();
+        }
+        CellValue evaluated = evaluator.evaluate(cell);
+        if (evaluated == null) {
+            return "";
+        }
+        return switch (evaluated.getCellType()) {
+            case STRING -> evaluated.getStringValue();
+            case NUMERIC -> {
+                double numericValue = evaluated.getNumberValue();
+                if (numericValue == (long) numericValue) {
+                    yield String.valueOf((long) numericValue);
+                }
+                yield String.valueOf(numericValue);
+            }
+            case BOOLEAN -> String.valueOf(evaluated.getBooleanValue());
+            case BLANK -> "";
+            default -> "";
+        };
     }
 
     /**
@@ -121,6 +146,7 @@ public class ExcelParserService {
              Workbook workbook = WorkbookFactory.create(inputStream)) {
 
             Sheet sheet = workbook.getSheetAt(0);
+            FormulaEvaluator evaluator = workbook.getCreationHelper().createFormulaEvaluator();
 
             // Skip title row (row 0) and header row (row 1), start from row 2
             for (int i = 2; i <= sheet.getLastRowNum(); i++) {
@@ -130,18 +156,17 @@ public class ExcelParserService {
                 }
 
                 // 按列顺序读取: 姓名、性别、学院、年级、学号、联系方式、服务时长、活动名称
-                String username = getCellValueAsString(row.getCell(0));
-                String gender = getCellValueAsString(row.getCell(1));
-                String college = getCellValueAsString(row.getCell(2));
-                String grade = getCellValueAsString(row.getCell(3));
-                String studentNo = getCellValueAsString(row.getCell(4));
-                String phone = getCellValueAsString(row.getCell(5));
-                String durationStr = getCellValueAsString(row.getCell(6));
-                String activityName = getCellValueAsString(row.getCell(7));
+                String username = getCellValueAsString(row.getCell(0), evaluator);
+                String gender = getCellValueAsString(row.getCell(1), evaluator);
+                String college = getCellValueAsString(row.getCell(2), evaluator);
+                String grade = getCellValueAsString(row.getCell(3), evaluator);
+                String studentNo = getCellValueAsString(row.getCell(4), evaluator);
+                String phone = getCellValueAsString(row.getCell(5), evaluator);
+                String durationStr = getCellValueAsString(row.getCell(6), evaluator);
+                String activityName = getCellValueAsString(row.getCell(7), evaluator);
 
                 // 跳过学号为空的行
-                if (studentNo == null || studentNo.trim().isEmpty()) {
-                    log.warn("Skipping row {} due to empty student number", i + 1);
+                if (isBlankRow(username, gender, college, grade, studentNo, phone, durationStr, activityName)) {
                     continue;
                 }
 
@@ -160,7 +185,7 @@ public class ExcelParserService {
                         .gender(gender != null ? gender.trim() : null)
                         .college(college != null ? college.trim() : null)
                         .grade(grade != null ? grade.trim() : null)
-                        .studentNo(studentNo.trim())
+                        .studentNo(studentNo != null ? studentNo.trim() : null)
                         .phone(phone != null ? phone.trim() : null)
                         .duration(duration)
                         .activityName(activityName != null ? activityName.trim() : null)
@@ -170,12 +195,20 @@ public class ExcelParserService {
             }
 
             log.info("Parsed {} batch import records from Excel file", records.size());
-        } catch (Exception e) {
+        } catch (IOException | EncryptedDocumentException | IllegalArgumentException e) {
             log.error("Failed to parse Excel file for batch import", e);
             throw new IOException("Failed to parse Excel file: " + e.getMessage(), e);
         }
 
         return records;
     }
-}
 
+    private boolean isBlankRow(String... values) {
+        for (String value : values) {
+            if (value != null && !value.trim().isEmpty()) {
+                return false;
+            }
+        }
+        return true;
+    }
+}

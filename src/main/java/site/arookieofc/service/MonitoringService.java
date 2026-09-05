@@ -1,11 +1,15 @@
 package site.arookieofc.service;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
+import site.arookieofc.common.cache.CacheInvalidateEvent;
+import site.arookieofc.common.elasticsearch.ElasticsearchTemplate;
 import site.arookieofc.controller.VO.MonitoringDashboardVO;
 import site.arookieofc.controller.VO.MonitoringDashboardVO.*;
 import site.arookieofc.controller.VO.MonitoringFiltersVO;
@@ -15,114 +19,89 @@ import site.arookieofc.controller.VO.UserStatVO;
 import site.arookieofc.controller.VO.UserStatPageVO;
 import site.arookieofc.dao.mapper.MonitoringMapper;
 
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
+import site.arookieofc.common.cache.LocalCache;
+import site.arookieofc.util.PaginationUtils;
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class MonitoringService {
+    private static final List<String> LOG_KEYWORD_FIELDS = List.of("message", "logger_name", "level");
 
     private final MonitoringMapper monitoringMapper;
-    private final ObjectMapper objectMapper;
-
-    @Value("${app.logging.es.host:localhost}")
-    private String esHost;
-
-    @Value("${app.logging.es.port:9200}")
-    private int esPort;
-
-    @Value("${app.logging.es.scheme:http}")
-    private String esScheme;
+    private final ElasticsearchTemplate esTemplate;
 
     @Value("${app.logging.es.index-pattern:volunteer-duration-*}")
     private String esIndexPattern;
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(3))
-            .build();
+    // 30s TTL, 5s null TTL (penetration), ±20% jitter (avalanche), computeIfAbsent (breakdown)
+    private final LocalCache<MonitoringDashboardVO> dashboardCache = new LocalCache<>(30_000, 5_000, 0.2);
+    private final LocalCache<MonitoringOverviewVO> overviewCache = new LocalCache<>(30_000, 5_000, 0.2);
+    private final LocalCache<MonitoringFiltersVO> filtersCache = new LocalCache<>(300_000, 30_000, 0.2);
+
+    public MonitoringService(MonitoringMapper monitoringMapper, ElasticsearchTemplate esTemplate) {
+        this(monitoringMapper, esTemplate, "volunteer-duration-*");
+    }
+
+    MonitoringService(MonitoringMapper monitoringMapper, ElasticsearchTemplate esTemplate, String esIndexPattern) {
+        this.monitoringMapper = monitoringMapper;
+        this.esTemplate = esTemplate;
+        this.esIndexPattern = esIndexPattern;
+    }
+
+    @EventListener
+    public void onCacheInvalidate(CacheInvalidateEvent event) {
+        if (event.getScope() == CacheInvalidateEvent.Scope.MONITORING
+                || event.getScope() == CacheInvalidateEvent.Scope.ACTIVITY
+                || event.getScope() == CacheInvalidateEvent.Scope.ALL) {
+            dashboardCache.invalidateAll();
+            overviewCache.invalidateAll();
+        }
+    }
 
     public MonitoringDashboardVO getDashboardData(String timeRange) {
-        // 计算时间范围
-        TimeRange range = calculateTimeRange(timeRange);
-
-        // 构建概览数据
-        OverviewVO overview = buildOverview(range);
-
-        // 构建分类统计数据
-        ClassificationStatsVO classificationStats = buildClassificationStats();
-
-        // 构建活动类型分布
-        List<ActivityTypeDistributionVO> activityTypes = buildActivityTypeDistribution();
-
-        // 构建Top10用户排行
-        List<TopUserVO> topUsers = buildTopUsers(10);
-
-        // 构建增长榜（可以基于最近参与活动最多的用户或其他指标）
-        List<TopUserVO> growthRanking = buildGrowthRanking(range, 10);
-
-        return MonitoringDashboardVO.builder()
-                .overview(overview)
-                .classificationStats(classificationStats)
-                .activityTypes(activityTypes)
-                .topUsers(topUsers)
-                .growthRanking(growthRanking)
-                .build();
+        return dashboardCache.get("dashboard:" + timeRange, () -> {
+            TimeRange range = calculateTimeRange(timeRange);
+            return MonitoringDashboardVO.builder()
+                    .overview(buildOverview(range))
+                    .classificationStats(buildClassificationStats())
+                    .activityTypes(buildActivityTypeDistribution())
+                    .topUsers(buildTopUsers(10))
+                    .growthRanking(buildTopUsers(10))
+                    .build();
+        });
     }
 
-    /**
-     * 获取筛选选项
-     */
     public MonitoringFiltersVO getFilters() {
-        List<String> colleges = monitoringMapper.getDistinctColleges();
-        List<String> grades = monitoringMapper.getDistinctGrades();
-        List<String> clazzes = monitoringMapper.getDistinctClazzes();
-
-        return MonitoringFiltersVO.builder()
-                .colleges(colleges)
-                .grades(grades)
-                .clazzes(clazzes)
-                .build();
+        return filtersCache.get("filters", () -> MonitoringFiltersVO.builder()
+                .colleges(monitoringMapper.getDistinctColleges())
+                .grades(monitoringMapper.getDistinctGrades())
+                .clazzes(monitoringMapper.getDistinctClazzes())
+                .build());
     }
 
-    /**
-     * 获取监控概览数据（支持筛选）
-     */
     public MonitoringOverviewVO getOverview(String college, String grade, String clazz) {
-        // 统计筛选条件下的用户数量
-        Long totalUsers = monitoringMapper.countUsersByFilter(college, grade, clazz);
-
-        // 统计筛选条件下的总时长
-        Double totalDuration = monitoringMapper.sumDurationByFilter(college, grade, clazz);
-
-        // 统计筛选条件下的参加活动人次
-        Long totalActivities = monitoringMapper.countParticipantsByFilter(college, grade, clazz);
-
-        // 计算平均值
-        double averageDuration = (totalUsers != null && totalUsers > 0 && totalDuration != null)
-                ? totalDuration / totalUsers : 0.0;
-
-        double averageActivities = (totalUsers != null && totalUsers > 0 && totalActivities != null)
-                ? (double) totalActivities / totalUsers : 0.0;
-
-        // 获取已完成的活动数（不受用户筛选影响，全局统计）
-        Long completedActivities = monitoringMapper.countCompletedActivities();
-
-        return MonitoringOverviewVO.builder()
-                .totalUsers(totalUsers != null ? totalUsers : 0L)
-                .totalDuration(totalDuration != null ? Math.round(totalDuration * 10.0) / 10.0 : 0.0)
-                .averageDuration(Math.round(averageDuration * 10.0) / 10.0)
-                .totalActivities(totalActivities != null ? totalActivities : 0L)
-                .averageActivities(Math.round(averageActivities * 10.0) / 10.0)
-                .completedActivities(completedActivities != null ? completedActivities : 0L)
-                .build();
+        String key = "overview:" + college + "|" + grade + "|" + clazz;
+        return overviewCache.get(key, () -> {
+            Long totalUsers = monitoringMapper.countUsersByFilter(college, grade, clazz);
+            Double totalDuration = monitoringMapper.sumDurationByFilter(college, grade, clazz);
+            Long totalActivities = monitoringMapper.countParticipantsByFilter(college, grade, clazz);
+            Long completedActivities = monitoringMapper.countCompletedActivities();
+            double avgDur = (totalUsers != null && totalUsers > 0 && totalDuration != null) ? totalDuration / totalUsers : 0.0;
+            double avgAct = (totalUsers != null && totalUsers > 0 && totalActivities != null) ? (double) totalActivities / totalUsers : 0.0;
+            return MonitoringOverviewVO.builder()
+                    .totalUsers(totalUsers != null ? totalUsers : 0L)
+                    .totalDuration(totalDuration != null ? Math.round(totalDuration * 10.0) / 10.0 : 0.0)
+                    .averageDuration(Math.round(avgDur * 10.0) / 10.0)
+                    .totalActivities(totalActivities != null ? totalActivities : 0L)
+                    .averageActivities(Math.round(avgAct * 10.0) / 10.0)
+                    .completedActivities(completedActivities != null ? completedActivities : 0L)
+                    .build();
+        });
     }
 
     /**
@@ -132,14 +111,18 @@ public class MonitoringService {
                                        String sortField, String sortOrder,
                                        int page, int pageSize) {
         // 计算offset
-        int offset = Math.max(0, (page - 1) * pageSize);
+        int safePage = PaginationUtils.normalizePage(page);
+        int safePageSize = PaginationUtils.normalizePageSize(pageSize);
+        int offset = PaginationUtils.offset(safePage, safePageSize);
+        String safeSortField = normalizeSortField(sortField);
+        String safeSortOrder = normalizeSortOrder(sortOrder);
 
         // 获取总数
         Long total = monitoringMapper.countUsersByFilter(college, grade, clazz);
 
         // 获取分页数据
         List<Map<String, Object>> data = monitoringMapper.getUserStatsByFilter(
-                college, grade, clazz, sortField, sortOrder, pageSize, offset);
+                college, grade, clazz, safeSortField, safeSortOrder, safePageSize, offset);
 
         // 转换为VO并添加排名
         List<UserStatVO> records = new ArrayList<>();
@@ -169,111 +152,73 @@ public class MonitoringService {
 
         return UserStatPageVO.builder()
                 .total(total != null ? total : 0L)
-                .current(page)
-                .size(pageSize)
+                .current(safePage)
+                .size(safePageSize)
                 .records(records)
                 .build();
     }
 
+    private String normalizeSortField(String sortField) {
+        if ("duration".equals(sortField) || "totalDuration".equals(sortField)) {
+            return "totalDuration";
+        }
+        if ("activityCount".equals(sortField)) {
+            return "activityCount";
+        }
+        return null;
+    }
+
+    private String normalizeSortOrder(String sortOrder) {
+        return "asc".equalsIgnoreCase(sortOrder) ? "asc" : "desc";
+    }
+
     public List<MonitoringLogVO> getRecentLogs(int size, String keyword) {
         int boundedSize = Math.max(1, Math.min(size, 200));
-        String endpoint = String.format(
-                "%s://%s:%d/%s/_search?ignore_unavailable=true&allow_no_indices=true",
-                esScheme,
-                esHost,
-                esPort,
-                esIndexPattern
-        );
+        String normalizedKeyword = keyword != null && !keyword.isBlank() ? keyword.trim() : null;
+        String body = buildRecentLogsQueryBody(boundedSize, normalizedKeyword);
 
-        String body;
-        if (keyword != null && !keyword.isBlank()) {
-            body = String.format(
-                    Locale.ROOT,
-                    "{\"size\":%d,\"sort\":[{\"@timestamp\":{\"order\":\"desc\"}}],\"query\":{\"bool\":{\"should\":[{\"match_phrase\":{\"message\":\"%s\"}},{\"match_phrase\":{\"logger_name\":\"%s\"}},{\"match_phrase\":{\"level\":\"%s\"}}],\"minimum_should_match\":1}}}",
-                    boundedSize,
-                    escapeJson(keyword),
-                    escapeJson(keyword),
-                    escapeJson(keyword)
-            );
-        } else {
-            body = String.format(
-                    Locale.ROOT,
-                    "{\"size\":%d,\"sort\":[{\"@timestamp\":{\"order\":\"desc\"}}],\"query\":{\"match_all\":{}}}",
-                    boundedSize
-            );
+        JsonNode root = esTemplate.search(esIndexPattern, body, 5);
+        if (root == null) return Collections.emptyList();
+
+        JsonNode hits = root.path("hits").path("hits");
+        if (!hits.isArray()) return Collections.emptyList();
+
+        List<MonitoringLogVO> logs = new ArrayList<>();
+        for (JsonNode hit : hits) {
+            JsonNode src = hit.path("_source");
+            logs.add(MonitoringLogVO.builder()
+                    .timestamp(src.path("@timestamp").asText(""))
+                    .level(src.path("level").asText("UNKNOWN"))
+                    .logger(src.path("logger_name").asText(""))
+                    .thread(src.path("thread_name").asText(""))
+                    .message(src.path("message").asText(""))
+                    .service(src.path("service").asText(""))
+                    .environment(src.path("environment").asText(""))
+                    .build());
         }
-
-        try {
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint))
-                    .timeout(Duration.ofSeconds(5))
-                    .header("Content-Type", "application/json")
-                    .POST(HttpRequest.BodyPublishers.ofString(body, StandardCharsets.UTF_8))
-                    .build();
-
-            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                String responseBody = response.body();
-                String bodyPreview = responseBody == null ? "" : responseBody.substring(0, Math.min(responseBody.length(), 300));
-                throw new IllegalStateException("Elasticsearch query failed: HTTP " + response.statusCode() + ", body=" + bodyPreview);
-            }
-
-            JsonNode root = objectMapper.readTree(response.body());
-            JsonNode hits = root.path("hits").path("hits");
-            if (!hits.isArray()) {
-                return Collections.emptyList();
-            }
-
-            List<MonitoringLogVO> logs = new ArrayList<>();
-            for (JsonNode hit : hits) {
-                JsonNode source = hit.path("_source");
-                logs.add(MonitoringLogVO.builder()
-                        .timestamp(source.path("@timestamp").asText(""))
-                        .level(source.path("level").asText("UNKNOWN"))
-                        .logger(source.path("logger_name").asText(""))
-                        .thread(source.path("thread_name").asText(""))
-                        .message(source.path("message").asText(""))
-                        .service(source.path("service").asText(""))
-                        .environment(source.path("environment").asText(""))
-                        .build());
-            }
-            return logs;
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            log.warn("Elasticsearch query interrupted. endpoint={}, size={}, keyword={}", endpoint, boundedSize, safeKeyword(keyword), e);
-            return Collections.emptyList();
-        } catch (Exception e) {
-            String errorMessage = e.getMessage();
-            if (errorMessage == null || errorMessage.isBlank()) {
-                errorMessage = e.getClass().getName();
-            }
-            log.warn(
-                    "Failed to query Elasticsearch logs. endpoint={}, size={}, keyword={}, error={}",
-                    endpoint,
-                    boundedSize,
-                    safeKeyword(keyword),
-                    errorMessage,
-                    e
-            );
-            return Collections.emptyList();
-        }
+        return logs;
     }
 
-    private String safeKeyword(String keyword) {
+    private String buildRecentLogsQueryBody(int size, String keyword) {
+        ObjectNode body = JsonNodeFactory.instance.objectNode();
+        body.put("size", size);
+
+        ArrayNode sort = body.putArray("sort");
+        sort.addObject().putObject("@timestamp").put("order", "desc");
+
+        ObjectNode query = body.putObject("query");
         if (keyword == null) {
-            return "";
+            query.putObject("match_all");
+            return body.toString();
         }
-        String trimmed = keyword.trim();
-        return trimmed.length() > 80 ? trimmed.substring(0, 80) + "..." : trimmed;
-    }
 
-    private String escapeJson(String value) {
-        return value
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+        ObjectNode bool = query.putObject("bool");
+        ArrayNode should = bool.putArray("should");
+        for (String field : LOG_KEYWORD_FIELDS) {
+            should.addObject().putObject("match_phrase").put(field, keyword);
+        }
+        bool.put("minimum_should_match", 1);
+        return body.toString();
     }
 
     /**
@@ -375,64 +320,29 @@ public class MonitoringService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 构建志愿时长Top用户
-     */
     private List<TopUserVO> buildTopUsers(int limit) {
         List<Map<String, Object>> topData = monitoringMapper.getTopUsersByHours(limit);
-
         List<TopUserVO> result = new ArrayList<>();
         int rank = 1;
         for (Map<String, Object> item : topData) {
             String studentNo = (String) item.get("studentNo");
             String name = (String) item.get("name");
-            Double hours = item.get("hours") != null ? ((Number) item.get("hours")).doubleValue() : 0.0;
-
+            double hours = item.get("hours") != null ? ((Number) item.get("hours")).doubleValue() : 0.0;
             result.add(TopUserVO.builder()
-                    .rank(rank++)
-                    .studentNo(studentNo)
+                    .rank(rank++).studentNo(studentNo)
                     .name(name != null ? name : studentNo)
-                    .hours(Math.round(hours * 10.0) / 10.0)
-                    .build());
+                    .hours(Math.round(hours * 10.0) / 10.0).build());
         }
         return result;
     }
 
-    /**
-     * 构建增长榜（时间范围内获得时长最多的用户）
-     * 这里简单复用Top用户数据，实际项目中可以根据时间范围计算增量
-     */
-    private List<TopUserVO> buildGrowthRanking(TimeRange range, int limit) {
-        // 简化实现：直接复用总时长排行，实际项目中应该计算时间范围内的增量
-        return buildTopUsers(limit);
-    }
+    private static final Map<String, Long> TIME_RANGE_DAYS = Map.of(
+            "daily", 1L, "weekly", 7L, "monthly", 30L, "yearly", 365L);
 
-    /**
-     * 计算时间范围
-     */
     private TimeRange calculateTimeRange(String timeRange) {
+        long days = TIME_RANGE_DAYS.getOrDefault(timeRange, 30L);
         LocalDateTime now = LocalDateTime.now();
-        LocalDateTime start;
-        LocalDateTime end = now;
-
-        switch (timeRange) {
-            case "daily":
-                start = now.toLocalDate().atStartOfDay();
-                break;
-            case "weekly":
-                start = now.minusDays(7).toLocalDate().atStartOfDay();
-                break;
-            case "monthly":
-                start = now.minusDays(30).toLocalDate().atStartOfDay();
-                break;
-            case "yearly":
-                start = now.minusDays(365).toLocalDate().atStartOfDay();
-                break;
-            default:
-                start = now.minusDays(30).toLocalDate().atStartOfDay();
-        }
-
-        return new TimeRange(start, end);
+        return new TimeRange(now.minusDays(days).toLocalDate().atStartOfDay(), now);
     }
 
 
